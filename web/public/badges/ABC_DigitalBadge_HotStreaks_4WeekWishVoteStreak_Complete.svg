@@ -1,0 +1,8 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="200" height="200" fill="#AD5CFF"/>
+<path d="M137.5 75H150V87.5H162.5V100H175V112.5H25V25H175V37.5H162.5V50H150V62.5H137.5V75Z" fill="#FFCAFD"/>
+<path d="M37.5 25H25V175H37.5V25Z" fill="#C797FF"/>
+<path d="M75 37.5H62.5V75H75V37.5Z" fill="#AD5CFF"/>
+<path d="M112.5 62.5H62.5V75H112.5V62.5Z" fill="#AD5CFF"/>
+<path d="M100 37.5H87.5V100H100V37.5Z" fill="#AD5CFF"/>
+</svg>
