@@ -1,0 +1,221 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Builder Badge Board - data layer
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Default: minsteww26@gmail.com
+    Description: Email address to receive AWS cost/usage alerts
+
+Globals:
+  Function:
+    Runtime: nodejs24.x
+    Timeout: 10
+    MemorySize: 128
+    Environment:
+      Variables:
+        BADGES_TABLE: !Ref BadgesTable
+        ARTICLES_TABLE: !Ref ArticlesTable
+
+Resources:
+  BadgesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Badges
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: badgeId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: badgeId
+          KeyType: RANGE
+
+  ArticlesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Articles
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: articleId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: articleId
+          KeyType: RANGE
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: builder-badge-board-admin
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        # ponytail: wildcard origin, tighten to the deployed Amplify domain once known
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+              audience:
+                - !Ref UserPoolClient
+            IdentitySource: "$request.header.Authorization"
+
+  CrudFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handler.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BadgesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ArticlesTable
+      Events:
+        ListBadges:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /badges
+            Method: GET
+        CreateBadge:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /badges
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        UpdateBadge:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /badges/{id}
+            Method: PUT
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteBadge:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /badges/{id}
+            Method: DELETE
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ListArticles:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /articles
+            Method: GET
+        CreateArticle:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /articles
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        UpdateArticle:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /articles/{id}
+            Method: PUT
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteArticle:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /articles/{id}
+            Method: DELETE
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: builder-badge-board-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: 10
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 50
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+Outputs:
+  BadgesTableName:
+    Value: !Ref BadgesTable
+  ArticlesTableName:
+    Value: !Ref ArticlesTable
+  ApiUrl:
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
