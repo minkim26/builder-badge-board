@@ -59,13 +59,16 @@ export function dateKeyFor(timeZone) {
 }
 
 // Real elapsed ms until the next local midnight in `timeZone`. Computed as
-// a true UTC instant rather than by subtracting two synthetic wall-clock
-// Dates, which would silently assume every day is exactly 24 hours and be
-// off by an hour on a DST changeover day.
-export function msUntilMidnight(timeZone) {
-  const now = new Date();
+// a true UTC instant via one fixed-point correction: a first-pass estimate
+// using the offset at `now`, then re-reading the offset at that estimate,
+// since on the day a DST transition happens the offset at the target
+// midnight can differ from the offset right now. `now` is a parameter
+// (not just `new Date()` internally) so this is directly testable.
+export function msUntilMidnight(timeZone, now = new Date()) {
   const { y, m, d } = zonedParts(now, timeZone);
-  const nextMidnightUTC = Date.UTC(y, m - 1, d + 1, 0, 0, 0) - zoneOffsetMs(now, timeZone);
+  const wallMidnight = Date.UTC(y, m - 1, d + 1, 0, 0, 0);
+  const candidate = new Date(wallMidnight - zoneOffsetMs(now, timeZone));
+  const nextMidnightUTC = wallMidnight - zoneOffsetMs(candidate, timeZone);
   return nextMidnightUTC - now.getTime();
 }
 
