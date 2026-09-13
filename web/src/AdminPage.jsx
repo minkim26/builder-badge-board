@@ -1,11 +1,83 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { login, getSession, logout } from './auth';
 import ResourceManager from './ResourceManager';
 import { BADGE_CATALOG, latestSync } from './badgeCatalog';
 import { TAMPERMONKEY_SCRIPT } from './tampermonkeyScript';
 import TimezoneSelect from './TimezoneSelect';
-import { formatTimestamp, getStoredTimezone, setStoredTimezone } from './timezone';
+import {
+  dateKeyFor,
+  msUntilMidnight,
+  formatCountdown,
+  formatDateLabel,
+  timezoneAbbrev,
+  formatTimestamp,
+  getStoredTimezone,
+  setStoredTimezone,
+} from './timezone';
 import * as api from './api';
+
+const CHECKLIST_ITEMS = ['Visited Builder Center', 'Liked a post', 'Left a comment'];
+
+// localStorage-backed and keyed by date on purpose: this is a personal daily
+// nudge, not real data — losing it costs nothing, and keying by date means
+// it naturally resets every day with no cleanup logic needed. `timezone`
+// comes from the parent so it's the same one control governing every
+// timestamp on the page, not a checklist-only setting.
+function DailyChecklist({ timezone }) {
+  const [dateKey, setDateKey] = useState(() => dateKeyFor(timezone));
+  const [msLeft, setMsLeft] = useState(() => msUntilMidnight(timezone));
+  const [checked, setChecked] = useState({});
+
+  // Ticks every second so the countdown is live and so a real midnight
+  // rollover (not just a timezone switch) is caught without a page reload.
+  useEffect(() => {
+    const tick = () => {
+      setDateKey(dateKeyFor(timezone));
+      setMsLeft(msUntilMidnight(timezone));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [timezone]);
+
+  // Reloads the checklist whenever the effective date changes, whether from
+  // an actual midnight rollover or the user switching timezones.
+  useEffect(() => {
+    try {
+      setChecked(JSON.parse(localStorage.getItem(`badge-board-checklist-${dateKey}`)) || {});
+    } catch {
+      setChecked({});
+    }
+  }, [dateKey]);
+
+  function toggle(item) {
+    const next = { ...checked, [item]: !checked[item] };
+    setChecked(next);
+    try {
+      localStorage.setItem(`badge-board-checklist-${dateKey}`, JSON.stringify(next));
+    } catch {
+      // private browsing / storage disabled — checklist just won't persist
+    }
+  }
+
+  return (
+    <div>
+      <p className="checklist-meta">
+        {formatDateLabel(timezone)} · resets in {formatCountdown(msLeft)} ({timezoneAbbrev(timezone)})
+      </p>
+      <ul className="checklist">
+        {CHECKLIST_ITEMS.map((item) => (
+          <li key={item}>
+            <label>
+              <input type="checkbox" checked={Boolean(checked[item])} onChange={() => toggle(item)} />
+              {item}
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function CopyScriptButton() {
   const [copied, setCopied] = useState(false);
@@ -162,6 +234,11 @@ export default function AdminPage() {
         </label>
         <button type="button" onClick={handleAuthError}>Log out</button>
       </div>
+
+      <section>
+        <h3>Today's Checklist</h3>
+        <DailyChecklist timezone={timezone} />
+      </section>
 
       <section>
         <h3>Badges</h3>
