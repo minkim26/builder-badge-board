@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { login, getSession, logout } from './auth';
 import ResourceManager from './ResourceManager';
-import { BADGE_CATALOG, latestSync } from './badgeCatalog';
+import { BADGE_CATALOG, catalogEntry, latestSync } from './badgeCatalog';
 import { TAMPERMONKEY_SCRIPT } from './tampermonkeyScript';
 import { QUICK_LINKS } from './quickLinks';
 import TimezoneSelect from './TimezoneSelect';
@@ -123,8 +123,6 @@ function ProgressSyncSetup() {
     </details>
   );
 }
-
-const catalogEntry = (name) => BADGE_CATALOG.find((b) => b.name === name);
 
 const BADGE_FIELDS = [
   {

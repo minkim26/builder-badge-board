@@ -33,6 +33,12 @@ export const BADGE_CATALOG = [
   { name: '90-Day Comment Streak', criteria: 'Comment daily for 90 consecutive days.', target: 90, unit: 'days', icon: 'ABC_DigitalBadge_HotStreaks_90DayCommentStreak_Complete.svg' },
 ];
 
+// Shared by the public and admin pages so both look up a badge's catalog
+// entry the same way.
+export function catalogEntry(name) {
+  return BADGE_CATALOG.find((b) => b.name === name);
+}
+
 // Most recent updatedAt across all badges, or null if none are stamped yet
 // (older records predate the field). Shared by the public and admin pages
 // so "last synced" reads the same value everywhere.

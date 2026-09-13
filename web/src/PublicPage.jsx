@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import * as api from './api';
-import { BADGE_CATALOG, latestSync } from './badgeCatalog';
+import { BADGE_CATALOG, catalogEntry, latestSync } from './badgeCatalog';
 import { QUICK_LINKS } from './quickLinks';
 import TimezoneSelect from './TimezoneSelect';
 import { getStoredTimezone, setStoredTimezone, formatTimestamp } from './timezone';
-
-const catalogEntry = (name) => BADGE_CATALOG.find((b) => b.name === name);
 
 // Only render as a link if it's actually http(s) — a stored `javascript:` or
 // other scheme in a URL field would otherwise be a live XSS on this page.
