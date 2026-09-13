@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { login, getSession, logout } from './auth';
 import ResourceManager from './ResourceManager';
-import { BADGE_CATALOG } from './badgeCatalog';
+import { BADGE_CATALOG, latestSync } from './badgeCatalog';
 import { TAMPERMONKEY_SCRIPT } from './tampermonkeyScript';
+import TimezoneSelect from './TimezoneSelect';
+import { formatTimestamp, getStoredTimezone, setStoredTimezone } from './timezone';
 import * as api from './api';
 
 function CopyScriptButton() {
@@ -118,10 +120,18 @@ export default function AdminPage() {
   const [badgesKey, setBadgesKey] = useState(0);
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [badges, setBadges] = useState([]);
+  const [timezone, setTimezone] = useState(getStoredTimezone);
+  const synced = latestSync(badges);
 
   function handleAuthError() {
     logout();
     setSession(null);
+  }
+
+  function handleTimezoneChange(tz) {
+    setTimezone(tz);
+    setStoredTimezone(tz);
   }
 
   async function handleSync() {
@@ -147,6 +157,9 @@ export default function AdminPage() {
     <div>
       <div className="admin-header">
         <h2>Admin</h2>
+        <label className="timezone-picker">
+          Timezone <TimezoneSelect value={timezone} onChange={handleTimezoneChange} />
+        </label>
         <button type="button" onClick={handleAuthError}>Log out</button>
       </div>
 
@@ -159,6 +172,7 @@ export default function AdminPage() {
           <small className="field-hint"> Earned badges only — in-progress badges sync via the Tampermonkey script below.</small>
         </p>
         {syncStatus && <p className="sync-status">{syncStatus}</p>}
+        {synced && <p className="sync-meta">Last synced {formatTimestamp(synced, timezone)}</p>}
         <ProgressSyncSetup />
         <ResourceManager
           key={badgesKey}
@@ -167,6 +181,7 @@ export default function AdminPage() {
           fields={BADGE_FIELDS}
           token={session.idToken}
           onAuthError={handleAuthError}
+          onData={setBadges}
         />
       </section>
 

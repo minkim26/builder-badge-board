@@ -124,6 +124,7 @@ async function syncBadges() {
         name: awarded.baseBadge.displayName,
         status: 'earned',
         dateEarned: new Date(awarded.awardedDate * 1000).toISOString().slice(0, 10),
+        updatedAt: new Date().toISOString(),
       };
       await client.send(new PutCommand({ TableName: TABLES.badges.name, Item: item }));
       count += 1;
@@ -158,9 +159,14 @@ async function progressSync(event) {
       new UpdateCommand({
         TableName: TABLES.badges.name,
         Key: { userId: USER_ID, badgeId: item.badgeId },
-        UpdateExpression: 'SET #n = :n, #s = :s, #p = :p',
-        ExpressionAttributeNames: { '#n': 'name', '#s': 'status', '#p': 'progress' },
-        ExpressionAttributeValues: { ':n': item.name, ':s': 'in-progress', ':p': String(item.progress) },
+        UpdateExpression: 'SET #n = :n, #s = :s, #p = :p, #u = :u',
+        ExpressionAttributeNames: { '#n': 'name', '#s': 'status', '#p': 'progress', '#u': 'updatedAt' },
+        ExpressionAttributeValues: {
+          ':n': item.name,
+          ':s': 'in-progress',
+          ':p': String(item.progress),
+          ':u': new Date().toISOString(),
+        },
       })
     );
   }

@@ -6,14 +6,20 @@ const emptyValues = (fields) =>
 
 // Generic add/edit/delete list for one resource (badges or articles) — both
 // share the same CRUD shape, just different fields.
-export default function ResourceManager({ resource, idKey, fields, token, onAuthError }) {
+export default function ResourceManager({ resource, idKey, fields, token, onAuthError, onData }) {
   const [items, setItems] = useState([]);
   const [editingId, setEditingId] = useState(null); // null = adding new
   const [values, setValues] = useState(emptyValues(fields));
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.list(resource).then(setItems).catch((err) => setError(err.message));
+    // onData deliberately left out of the dep array — it's a one-time report
+    // of the initial fetch, not something that should re-run the fetch.
+    api.list(resource).then((data) => {
+      setItems(data);
+      onData?.(data);
+    }).catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource]);
 
   function startEdit(item) {

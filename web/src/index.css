@@ -227,9 +227,26 @@ section {
   margin: 8px 0;
 }
 
-.sync-status {
+.sync-status,
+.sync-meta {
   font-size: 13px;
   opacity: 0.8;
+}
+
+.timezone-select {
+  font: inherit;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.timezone-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
 }
 
 .setup-panel {

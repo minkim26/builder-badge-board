@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import * as api from './api';
-import { BADGE_CATALOG } from './badgeCatalog';
+import { BADGE_CATALOG, latestSync } from './badgeCatalog';
+import TimezoneSelect from './TimezoneSelect';
+import { getStoredTimezone, setStoredTimezone, formatTimestamp } from './timezone';
 
 const catalogEntry = (name) => BADGE_CATALOG.find((b) => b.name === name);
 
@@ -12,6 +14,13 @@ export default function PublicPage() {
   const [badges, setBadges] = useState([]);
   const [articles, setArticles] = useState([]);
   const [error, setError] = useState(null);
+  const [timezone, setTimezone] = useState(getStoredTimezone);
+  const synced = latestSync(badges);
+
+  function handleTimezoneChange(tz) {
+    setTimezone(tz);
+    setStoredTimezone(tz);
+  }
 
   useEffect(() => {
     Promise.all([api.list('badges'), api.list('articles')])
@@ -31,6 +40,12 @@ export default function PublicPage() {
         <h2>Badges</h2>
         <p className="badge-progress">
           {badges.filter((b) => b.status === 'earned').length} / {BADGE_CATALOG.length} earned
+          {synced && (
+            <>
+              {' · Last synced '}{formatTimestamp(synced, timezone)}{' '}
+              <TimezoneSelect value={timezone} onChange={handleTimezoneChange} />
+            </>
+          )}
         </p>
         {badges.length === 0 && !error && <p>No badges yet.</p>}
         <ul className="badge-grid">
