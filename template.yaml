@@ -7,6 +7,18 @@ Parameters:
     Type: String
     Default: minsteww26@gmail.com
     Description: Email address to receive AWS cost/usage alerts
+  BuilderProfileId:
+    Type: String
+    Default: b65d0e67-8c3d-4124-8cf2-cbabbf7f4fff
+    Description: AWS Builder Center profile ID (bpId), used by the badge sync endpoint
+  SyncKey:
+    Type: String
+    NoEcho: true
+    Description: >-
+      Shared secret checked by POST /badges/progress-sync (no Cognito auth,
+      since the Tampermonkey userscript can't do an interactive login).
+      No default on purpose — must be passed explicitly at deploy time,
+      never committed to the template.
 
 Globals:
   Function:
@@ -17,6 +29,8 @@ Globals:
       Variables:
         BADGES_TABLE: !Ref BadgesTable
         ARTICLES_TABLE: !Ref ArticlesTable
+        BUILDER_PROFILE_ID: !Ref BuilderProfileId
+        SYNC_KEY: !Ref SyncKey
 
 Resources:
   BadgesTable:
@@ -91,6 +105,7 @@ Resources:
         AllowHeaders:
           - Content-Type
           - Authorization
+          - X-Sync-Key
       Auth:
         Authorizers:
           CognitoAuthorizer:
@@ -99,6 +114,13 @@ Resources:
               audience:
                 - !Ref UserPoolClient
             IdentitySource: "$request.header.Authorization"
+      # ponytail: this doesn't close the progress-sync count-check race by
+      # itself, but it bounds how fast a leaked SYNC_KEY could exploit it.
+      # A real fix needs an atomic counter item, not justified here yet.
+      RouteSettings:
+        "POST /badges/progress-sync":
+          ThrottlingBurstLimit: 5
+          ThrottlingRateLimit: 2
 
   CrudFunction:
     Type: AWS::Serverless::Function
@@ -125,6 +147,30 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+        SyncBadges:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /badges/sync
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ProgressSync:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /badges/progress-sync
+            Method: POST
+            # No Cognito authorizer — the Tampermonkey userscript can't do
+            # an interactive login. Protected by the SYNC_KEY shared secret
+            # instead, checked in the handler itself.
+        NightlySync:
+          Type: Schedule
+          Properties:
+            # ponytail: fixed UTC offset for PDT: drifts 1hr off true midnight
+            # PT once DST ends in Nov; fine for a personal badge counter.
+            Schedule: "cron(0 7 * * ? *)"
+            Enabled: true
         UpdateBadge:
           Type: HttpApi
           Properties:
