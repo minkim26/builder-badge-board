@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: src
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Run tests
+        run: node --test
+
+      - name: Lint frontend
+        run: npm run lint
+        working-directory: web
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: web
+
+      - uses: aws-actions/setup-sam@v2
+
+      - name: Validate SAM template
+        run: sam validate --lint
