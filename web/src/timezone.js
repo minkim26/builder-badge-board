@@ -29,24 +29,44 @@ export function setStoredTimezone(tz) {
   }
 }
 
-// A Date whose getFullYear/getHours/etc. read as the wall-clock time in
-// `timeZone` — its own getTime() isn't a real UTC instant, but subtracting
-// two such Dates still gives an accurate duration, which is all
-// dateKeyFor/msUntilMidnight below need it for.
-export function zonedNow(timeZone) {
-  return new Date(new Date().toLocaleString('en-US', { timeZone }));
+// Wall-clock date/time fields for `date` as seen in `timeZone`.
+function zonedParts(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type) => Number(parts.find((p) => p.type === type).value);
+  return { y: get('year'), m: get('month'), d: get('day'), h: get('hour') % 24, min: get('minute'), s: get('second') };
+}
+
+// `timeZone`'s current offset from UTC, in ms, read from its actual wall
+// clock rather than a fixed rule, so it's correct on both sides of a DST
+// transition. Exported for the test in timezone.test.js.
+export function zoneOffsetMs(date, timeZone) {
+  const { y, m, d, h, min, s } = zonedParts(date, timeZone);
+  return Date.UTC(y, m - 1, d, h, min, s) - date.getTime();
 }
 
 export function dateKeyFor(timeZone) {
-  const z = zonedNow(timeZone);
-  return `${z.getFullYear()}-${String(z.getMonth() + 1).padStart(2, '0')}-${String(z.getDate()).padStart(2, '0')}`;
+  const { y, m, d } = zonedParts(new Date(), timeZone);
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+// Real elapsed ms until the next local midnight in `timeZone`. Computed as
+// a true UTC instant rather than by subtracting two synthetic wall-clock
+// Dates, which would silently assume every day is exactly 24 hours and be
+// off by an hour on a DST changeover day.
 export function msUntilMidnight(timeZone) {
-  const z = zonedNow(timeZone);
-  const midnight = new Date(z);
-  midnight.setHours(24, 0, 0, 0);
-  return midnight - z;
+  const now = new Date();
+  const { y, m, d } = zonedParts(now, timeZone);
+  const nextMidnightUTC = Date.UTC(y, m - 1, d + 1, 0, 0, 0) - zoneOffsetMs(now, timeZone);
+  return nextMidnightUTC - now.getTime();
 }
 
 export function formatCountdown(ms) {
