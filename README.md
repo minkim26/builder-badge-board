@@ -51,8 +51,18 @@ Guided deploy will prompt for two parameters: `BuilderProfileId` (your AWS
 Builder Center profile ID, has a default) and `SyncKey` (a secret you make
 up yourself; no default, never commit it).
 
+`sam deploy` prints an API Gateway URL and a Cognito user pool/client ID.
+Copy those into `web/src/config.js`, and copy the API URL into `SYNC_URL`
+in `tampermonkey/progress-sync.user.js`, since a fresh stack has different
+values than the ones already committed there.
+
 After the first deploy, create the one admin user by hand in the Cognito
-console (the stack creates the User Pool, but there's no signup flow). See
+console (the stack creates the User Pool, but there's no signup flow). Set
+a permanent password when you create it rather than a temporary one: the
+login form doesn't handle Cognito's forced password-reset challenge, so a
+temporary password leaves the account unable to sign in until you either
+reset it via `aws cognito-idp admin-set-user-password --permanent` or check
+the console's equivalent option. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the auth flow this sets up.
 
 Earned badges sync on their own, both from a "Sync from Builder Center"
