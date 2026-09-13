@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Builder Badge Board - Progress Sync
 // @namespace    builder-badge-board
-// @version      1.1
+// @version      1.2
 // @description  Passively captures AWS Builder Center in-progress badge counts and syncs them to Builder Badge Board.
 // @match        https://builder.aws.com/*
 // @grant        unsafeWindow
@@ -69,8 +69,16 @@
       headers: { 'Content-Type': 'application/json', 'X-Sync-Key': SYNC_KEY },
       data: JSON.stringify({ items }),
       onload: (res) => {
-        const result = JSON.parse(res.responseText);
-        console.log('[badge-board] synced', result.synced, 'in-progress badges');
+        if (res.status < 200 || res.status >= 300) {
+          console.error('[badge-board] sync failed', res.status, res.responseText);
+          return;
+        }
+        try {
+          const result = JSON.parse(res.responseText);
+          console.log('[badge-board] synced', result.synced, 'in-progress badges');
+        } catch (err) {
+          console.error('[badge-board] sync returned invalid JSON', err);
+        }
       },
       onerror: (err) => console.error('[badge-board] sync failed', err),
     });
