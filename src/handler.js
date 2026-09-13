@@ -1,0 +1,102 @@
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const {
+  DynamoDBDocumentClient,
+  QueryCommand,
+  PutCommand,
+  UpdateCommand,
+  DeleteCommand,
+} = require('@aws-sdk/lib-dynamodb');
+const { randomUUID } = require('crypto');
+
+const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+// single-user app: every item lives under the same fixed partition key
+const USER_ID = 'me';
+
+const TABLES = {
+  badges: { name: process.env.BADGES_TABLE, idKey: 'badgeId' },
+  articles: { name: process.env.ARTICLES_TABLE, idKey: 'articleId' },
+};
+
+exports.handler = async (event) => {
+  const method = event.requestContext.http.method;
+  const [, resource, id] = event.rawPath.split('/');
+  const table = TABLES[resource];
+
+  if (!table) {
+    return respond(404, { message: 'Not found' });
+  }
+
+  try {
+    if (method === 'GET') {
+      const result = await client.send(
+        new QueryCommand({
+          TableName: table.name,
+          KeyConditionExpression: 'userId = :userId',
+          ExpressionAttributeValues: { ':userId': USER_ID },
+        })
+      );
+      return respond(200, result.Items);
+    }
+
+    if (method === 'POST') {
+      const body = JSON.parse(event.body || '{}');
+      const item = { ...body, userId: USER_ID, [table.idKey]: randomUUID() };
+      await client.send(new PutCommand({ TableName: table.name, Item: item }));
+      return respond(201, item);
+    }
+
+    if (method === 'PUT') {
+      const body = JSON.parse(event.body || '{}');
+      const update = buildUpdateExpression(body, ['userId', table.idKey]);
+      if (!update) {
+        return respond(400, { message: 'No fields to update' });
+      }
+      await client.send(
+        new UpdateCommand({
+          TableName: table.name,
+          Key: { userId: USER_ID, [table.idKey]: id },
+          ...update,
+        })
+      );
+      return respond(200, { ...body, userId: USER_ID, [table.idKey]: id });
+    }
+
+    if (method === 'DELETE') {
+      await client.send(
+        new DeleteCommand({
+          TableName: table.name,
+          Key: { userId: USER_ID, [table.idKey]: id },
+        })
+      );
+      return respond(204, null);
+    }
+
+    return respond(405, { message: 'Method not allowed' });
+  } catch (err) {
+    console.error(err);
+    return respond(500, { message: 'Internal error' });
+  }
+};
+
+function respond(statusCode, body) {
+  return {
+    statusCode,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === null ? '' : JSON.stringify(body),
+  };
+}
+
+// Builds a DynamoDB UpdateExpression from a plain object, skipping key fields.
+// Returns null when there are no updatable fields.
+function buildUpdateExpression(body, excludeKeys) {
+  const fields = Object.keys(body).filter((k) => !excludeKeys.includes(k));
+  if (fields.length === 0) return null;
+  return {
+    UpdateExpression: 'SET ' + fields.map((_, i) => `#f${i} = :v${i}`).join(', '),
+    ExpressionAttributeNames: Object.fromEntries(fields.map((k, i) => [`#f${i}`, k])),
+    ExpressionAttributeValues: Object.fromEntries(fields.map((k, i) => [`:v${i}`, body[k]])),
+  };
+}
+
+module.exports.buildUpdateExpression = buildUpdateExpression;
