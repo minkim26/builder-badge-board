@@ -133,7 +133,7 @@ const BADGE_FIELDS = [
     helpText: (v) => catalogEntry(v.name)?.criteria,
   },
   { key: 'status', label: 'Status', type: 'select', options: ['earned', 'in-progress'] },
-  { key: 'dateEarned', label: 'Date Earned', type: 'date' },
+  { key: 'dateEarned', label: 'Date Earned', type: 'date', showIf: (v) => v.status === 'earned' },
   {
     key: 'progress',
     label: 'Progress',
