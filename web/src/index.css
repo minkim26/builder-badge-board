@@ -233,6 +233,22 @@ section {
   opacity: 0.8;
 }
 
+.quick-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.quick-links li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.quick-links a {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
 .checklist-meta {
   display: flex;
   align-items: center;

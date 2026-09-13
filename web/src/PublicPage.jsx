@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as api from './api';
 import { BADGE_CATALOG, latestSync } from './badgeCatalog';
+import { QUICK_LINKS } from './quickLinks';
 import TimezoneSelect from './TimezoneSelect';
 import { getStoredTimezone, setStoredTimezone, formatTimestamp } from './timezone';
 
@@ -86,6 +87,17 @@ export default function PublicPage() {
               )}
               {a.publishDate && <span className="article-date"> · {a.publishDate}</span>}
               {a.tags && <span className="article-tags"> · {a.tags}</span>}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <h2>Quick Links</h2>
+        <ul className="quick-links">
+          {QUICK_LINKS.map((l) => (
+            <li key={l.href}>
+              <a href={l.href} target="_blank" rel="noopener noreferrer">{l.label}</a>
             </li>
           ))}
         </ul>

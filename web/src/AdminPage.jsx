@@ -3,6 +3,7 @@ import { login, getSession, logout } from './auth';
 import ResourceManager from './ResourceManager';
 import { BADGE_CATALOG, latestSync } from './badgeCatalog';
 import { TAMPERMONKEY_SCRIPT } from './tampermonkeyScript';
+import { QUICK_LINKS } from './quickLinks';
 import TimezoneSelect from './TimezoneSelect';
 import {
   dateKeyFor,
@@ -92,6 +93,7 @@ function CopyScriptButton() {
 }
 
 function ProgressSyncSetup() {
+  const profileLink = QUICK_LINKS[0]?.href;
   return (
     <details className="setup-panel">
       <summary>Enable in-progress badge sync (one-time setup)</summary>
@@ -108,8 +110,13 @@ function ProgressSyncSetup() {
           Scripts" for Tampermonkey — without it, Chrome silently blocks the script.
         </li>
         <li>
-          Visit your Builder Center badges tab and open the console (F12) — look for{' '}
-          <code>[badge-board] synced N in-progress badges</code>.
+          Visit your{' '}
+          {profileLink ? (
+            <a href={profileLink} target="_blank" rel="noopener noreferrer">Builder Center badges tab</a>
+          ) : (
+            'Builder Center badges tab'
+          )}{' '}
+          and open the console (F12) — look for <code>[badge-board] synced N in-progress badges</code>.
         </li>
       </ol>
       <CopyScriptButton />
