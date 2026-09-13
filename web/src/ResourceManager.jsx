@@ -48,7 +48,14 @@ export default function ResourceManager({ resource, idKey, fields, token, onAuth
         setItems((prev) => prev.map((it) => (it[idKey] === editingId ? updated : it)));
       } else {
         const created = await api.create(resource, payload, token);
-        setItems((prev) => [...prev, created]);
+        // The backend upserts badges by name, so `created` can be an
+        // existing item rather than a new one — replace it in place instead
+        // of appending a second copy under the same key.
+        setItems((prev) =>
+          prev.some((it) => it[idKey] === created[idKey])
+            ? prev.map((it) => (it[idKey] === created[idKey] ? created : it))
+            : [...prev, created]
+        );
       }
       startAdd();
     } catch (err) {
