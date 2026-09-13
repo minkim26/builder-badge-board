@@ -114,6 +114,13 @@ Resources:
               audience:
                 - !Ref UserPoolClient
             IdentitySource: "$request.header.Authorization"
+      # ponytail: this doesn't close the progress-sync count-check race by
+      # itself, but it bounds how fast a leaked SYNC_KEY could exploit it.
+      # A real fix needs an atomic counter item, not justified here yet.
+      RouteSettings:
+        "POST /badges/progress-sync":
+          ThrottlingBurstLimit: 5
+          ThrottlingRateLimit: 2
 
   CrudFunction:
     Type: AWS::Serverless::Function
