@@ -114,6 +114,7 @@ async function syncBadges() {
   const bpId = process.env.BUILDER_PROFILE_ID;
   let nextToken;
   let count = 0;
+  const existing = await queryUserItems(TABLES.badges.name);
 
   do {
     const url = new URL('https://api.builder.aws.com/rms/badges');
@@ -137,6 +138,7 @@ async function syncBadges() {
       };
       await client.send(new PutCommand({ TableName: TABLES.badges.name, Item: item }));
       count += 1;
+      await removeStaleDuplicate(existing, item.name, item.badgeId);
     }
     nextToken = data.nextToken;
   } while (nextToken);
@@ -153,14 +155,26 @@ async function syncBadges() {
 // value. Deliberately ignores anything but IN_PROGRESS items — earned
 // badges stay owned by syncBadges()/the sync button, so the two paths
 // never write conflicting data for the same badgeId.
+// Real catalog is 21 badges — this is slack, not a target, so a leaked
+// SYNC_KEY still can't grow the table without bound.
+const MAX_TOTAL_BADGES = 30;
+
 async function progressSync(event) {
-  if ((event.headers['x-sync-key'] || '') !== process.env.SYNC_KEY) {
+  const syncKey = process.env.SYNC_KEY;
+  if (!syncKey || event.headers?.['x-sync-key'] !== syncKey) {
     return respond(401, { message: 'Unauthorized' });
   }
 
   const body = JSON.parse(event.body || '{}');
   if (!isValidProgressItems(body.items)) {
     return respond(400, { message: 'items must be a non-empty array of {badgeId, name, progress}, max 25' });
+  }
+
+  const existing = await queryUserItems(TABLES.badges.name);
+  const existingIds = new Set(existing.map((b) => b.badgeId));
+  const newIds = body.items.map((i) => i.badgeId).filter((id) => !existingIds.has(id));
+  if (existing.length + newIds.length > MAX_TOTAL_BADGES) {
+    return respond(400, { message: 'Too many distinct badges for this account' });
   }
 
   for (const item of body.items) {
@@ -187,6 +201,8 @@ async function progressSync(event) {
     } catch (err) {
       if (err.name !== 'ConditionalCheckFailedException') throw err;
     }
+
+    await removeStaleDuplicate(existing, item.name, item.badgeId);
   }
 
   return respond(200, { synced: body.items.length });
@@ -213,8 +229,23 @@ async function findBadgeByName(name) {
   return items.find((b) => b.name === name);
 }
 
-// Caps at 25 (more than the whole badge catalog) so a leaked sync key
-// can't be used to write an unbounded amount of data.
+// The reverse direction of the same problem: a badge added by hand first,
+// under a random UUID, then confirmed later by real sync data under
+// Builder Center's own badgeId. Once the authoritative record exists, the
+// manual one is stale. `knownBadges` is a snapshot the caller already
+// fetched, so this adds no extra reads per item.
+async function removeStaleDuplicate(knownBadges, name, badgeId) {
+  const stale = knownBadges.find((b) => b.name === name && b.badgeId !== badgeId);
+  if (stale) {
+    await client.send(
+      new DeleteCommand({ TableName: TABLES.badges.name, Key: { userId: USER_ID, badgeId: stale.badgeId } })
+    );
+  }
+}
+
+// Caps a single request at 25 items (more than the whole badge catalog).
+// The real backstop against a leaked key growing the table without bound
+// is MAX_TOTAL_BADGES in progressSync(), not this per-request limit.
 function isValidProgressItems(items) {
   return (
     Array.isArray(items) &&
