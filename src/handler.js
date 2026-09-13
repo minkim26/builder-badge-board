@@ -40,6 +40,10 @@ exports.handler = async (event) => {
       return respond(200, { synced });
     }
 
+    if (method === 'POST' && resource === 'badges' && id === 'progress-sync') {
+      return progressSync(event);
+    }
+
     if (method === 'GET') {
       const result = await client.send(
         new QueryCommand({
@@ -130,6 +134,51 @@ async function syncBadges() {
   return count;
 }
 
+// Receives in-progress badge counts from the Tampermonkey userscript
+// (see tampermonkey/progress-sync.user.js) — it can't do an interactive
+// Cognito login, so this route is protected by a shared secret header
+// instead of the Cognito authorizer. No real AWS or Builder Center
+// credential ever reaches this app; the secret only grants write access
+// to this one table and is trivially revocable by redeploying with a new
+// value. Deliberately ignores anything but IN_PROGRESS items — earned
+// badges stay owned by syncBadges()/the sync button, so the two paths
+// never write conflicting data for the same badgeId.
+async function progressSync(event) {
+  if ((event.headers['x-sync-key'] || '') !== process.env.SYNC_KEY) {
+    return respond(401, { message: 'Unauthorized' });
+  }
+
+  const body = JSON.parse(event.body || '{}');
+  if (!isValidProgressItems(body.items)) {
+    return respond(400, { message: 'items must be a non-empty array of {badgeId, name, progress}, max 25' });
+  }
+
+  for (const item of body.items) {
+    await client.send(
+      new UpdateCommand({
+        TableName: TABLES.badges.name,
+        Key: { userId: USER_ID, badgeId: item.badgeId },
+        UpdateExpression: 'SET #n = :n, #s = :s, #p = :p',
+        ExpressionAttributeNames: { '#n': 'name', '#s': 'status', '#p': 'progress' },
+        ExpressionAttributeValues: { ':n': item.name, ':s': 'in-progress', ':p': String(item.progress) },
+      })
+    );
+  }
+
+  return respond(200, { synced: body.items.length });
+}
+
+// Caps at 25 (more than the whole badge catalog) so a leaked sync key
+// can't be used to write an unbounded amount of data.
+function isValidProgressItems(items) {
+  return (
+    Array.isArray(items) &&
+    items.length > 0 &&
+    items.length <= 25 &&
+    items.every((i) => i && typeof i.badgeId === 'string' && i.badgeId && typeof i.name === 'string' && i.name)
+  );
+}
+
 function respond(statusCode, body) {
   return {
     statusCode,
@@ -151,3 +200,4 @@ function buildUpdateExpression(body, excludeKeys) {
 }
 
 module.exports.buildUpdateExpression = buildUpdateExpression;
+module.exports.isValidProgressItems = isValidProgressItems;

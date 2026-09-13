@@ -135,6 +135,52 @@ triggers a Lambda that fetches/parses the profile and upserts into DynamoDB.
       (`cron(0 7 * * ? *)` — a `ponytail:` comment flags the ~1hr DST
       drift once PT switches to PST in November; not worth a
       timezone-aware expression for a personal badge counter).
+
+      In-progress badge automation was investigated to a conclusion, not
+      abandoned: the `badgeProgressList` response was only ever seen on a
+      **private, logged-in dashboard page** — the same request does not
+      exist at all when logged out (confirmed via an incognito reload of
+      the same page). That's a materially different thing from the
+      earned-badges endpoint, which needs no real credential. Two
+      server-side automation options were considered and rejected:
+      storing a live Builder Center session cookie in the project (a
+      working credential heading into a public GitHub repo, and one
+      that expires, so it wouldn't even be unattended), and a scheduled
+      GitHub Action doing a headless Playwright login (ruled out once
+      login turned out to require MFA/a 6-digit code, which can't be
+      scripted).
+
+      Follow-up 2026-09-13: automated anyway, client-side.
+      `tampermonkey/progress-sync.user.js` runs in the user's own
+      browser, using their own already-authenticated session — no
+      credential ever enters the project. It passively monkey-patches
+      `fetch` (via `unsafeWindow`, since the page's CSP blocks a plain
+      inline-script injection) and watches for whichever response
+      happens to carry `badgeProgressList` while the user browses
+      normally, forwarding only `IN_PROGRESS` items to a new
+      `POST /badges/progress-sync` route. That route has no Cognito
+      authorizer (the userscript can't do an interactive login either)
+      and is instead protected by a `SYNC_KEY` shared secret checked in
+      the handler — an app-specific, instantly-revocable secret, not a
+      real AWS or Builder Center credential. **Revised decision:
+      in-progress badges (9/21) are automated via the userscript when a
+      matching tab happens to be open; manual entry via the admin panel
+      remains the fallback for whenever it isn't.**
+
+      Confirmed working end-to-end 2026-09-13, after two real bugs found
+      via live console debugging: (1) `@grant none` gets Tampermonkey to
+      inject a literal inline `<script>` tag, which builder.aws.com's CSP
+      silently blocks (no `unsafe-inline`) — fixed by declaring
+      `@grant unsafeWindow` instead, which switches Tampermonkey to
+      extension-level content-script injection, running outside the
+      page's CSP entirely. (2) Even with that fix, calling the page's own
+      `fetch` (via `unsafeWindow`) to reach our API Gateway endpoint still
+      executes as a request from the page's document, so the page's CSP
+      `connect-src` (which doesn't allowlist our domain) blocked it —
+      fixed by using Tampermonkey's `GM_xmlhttpRequest` instead, which
+      runs the request from the extension's own context, bypassing page
+      CSP and CORS entirely. First real sync wrote all 9 in-progress
+      badges with correct live progress counts.
 - [ ] **7. End-to-end test + article** — test the full flow, take
       screenshots/recording, write the Builder Center article.
 

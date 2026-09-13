@@ -2,7 +2,46 @@ import { useState } from 'react';
 import { login, getSession, logout } from './auth';
 import ResourceManager from './ResourceManager';
 import { BADGE_CATALOG } from './badgeCatalog';
+import { TAMPERMONKEY_SCRIPT } from './tampermonkeyScript';
 import * as api from './api';
+
+function CopyScriptButton() {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(TAMPERMONKEY_SCRIPT);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return <button type="button" onClick={handleCopy}>{copied ? 'Copied!' : 'Copy script'}</button>;
+}
+
+function ProgressSyncSetup() {
+  return (
+    <details className="setup-panel">
+      <summary>Enable in-progress badge sync (one-time setup)</summary>
+      <ol>
+        <li>
+          Install the <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Tampermonkey</a> browser extension.
+        </li>
+        <li>
+          Click "Copy script" below, then in Tampermonkey: Dashboard → "+" → paste over the
+          template → replace <code>REPLACE_WITH_YOUR_SYNC_KEY</code> with your real sync key → save.
+        </li>
+        <li>
+          In <code>chrome://extensions</code>, turn on Developer mode, then enable "Allow User
+          Scripts" for Tampermonkey — without it, Chrome silently blocks the script.
+        </li>
+        <li>
+          Visit your Builder Center badges tab and open the console (F12) — look for{' '}
+          <code>[badge-board] synced N in-progress badges</code>.
+        </li>
+      </ol>
+      <CopyScriptButton />
+    </details>
+  );
+}
 
 const catalogEntry = (name) => BADGE_CATALOG.find((b) => b.name === name);
 
@@ -117,9 +156,10 @@ export default function AdminPage() {
           <button type="button" onClick={handleSync} disabled={syncing}>
             {syncing ? 'Syncing...' : 'Sync from Builder Center'}
           </button>
-          <small className="field-hint"> Earned badges only — in-progress badges still need manual entry.</small>
+          <small className="field-hint"> Earned badges only — in-progress badges sync via the Tampermonkey script below.</small>
         </p>
         {syncStatus && <p className="sync-status">{syncStatus}</p>}
+        <ProgressSyncSetup />
         <ResourceManager
           key={badgesKey}
           resource="badges"

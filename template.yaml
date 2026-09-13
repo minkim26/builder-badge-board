@@ -11,6 +11,14 @@ Parameters:
     Type: String
     Default: b65d0e67-8c3d-4124-8cf2-cbabbf7f4fff
     Description: AWS Builder Center profile ID (bpId), used by the badge sync endpoint
+  SyncKey:
+    Type: String
+    NoEcho: true
+    Description: >-
+      Shared secret checked by POST /badges/progress-sync (no Cognito auth,
+      since the Tampermonkey userscript can't do an interactive login).
+      No default on purpose — must be passed explicitly at deploy time,
+      never committed to the template.
 
 Globals:
   Function:
@@ -22,6 +30,7 @@ Globals:
         BADGES_TABLE: !Ref BadgesTable
         ARTICLES_TABLE: !Ref ArticlesTable
         BUILDER_PROFILE_ID: !Ref BuilderProfileId
+        SYNC_KEY: !Ref SyncKey
 
 Resources:
   BadgesTable:
@@ -96,6 +105,7 @@ Resources:
         AllowHeaders:
           - Content-Type
           - Authorization
+          - X-Sync-Key
       Auth:
         Authorizers:
           CognitoAuthorizer:
@@ -138,6 +148,15 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+        ProgressSync:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /badges/progress-sync
+            Method: POST
+            # No Cognito authorizer — the Tampermonkey userscript can't do
+            # an interactive login. Protected by the SYNC_KEY shared secret
+            # instead, checked in the handler itself.
         NightlySync:
           Type: Schedule
           Properties:

@@ -232,6 +232,28 @@ section {
   opacity: 0.8;
 }
 
+.setup-panel {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.setup-panel summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.setup-panel ol {
+  margin: 12px 0;
+  padding-left: 20px;
+}
+
+.setup-panel li {
+  margin-bottom: 6px;
+}
+
 .article-list li {
   padding: 8px 0;
   border-bottom: 1px solid var(--border);

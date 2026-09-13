@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildUpdateExpression } = require('./handler');
+const { buildUpdateExpression, isValidProgressItems } = require('./handler');
 
 test('builds SET expression for updatable fields', () => {
   const result = buildUpdateExpression({ status: 'earned', dateEarned: '2026-09-12' }, ['userId', 'badgeId']);
@@ -17,4 +17,15 @@ test('excludes key fields from the update', () => {
 test('returns null when nothing to update', () => {
   const result = buildUpdateExpression({ userId: 'me', badgeId: 'x' }, ['userId', 'badgeId']);
   assert.equal(result, null);
+});
+
+test('progress-sync accepts a well-formed items array', () => {
+  assert.equal(isValidProgressItems([{ badgeId: 'a', name: 'A' }]), true);
+});
+
+test('progress-sync rejects a missing/empty/oversized/malformed items array', () => {
+  assert.equal(isValidProgressItems(undefined), false);
+  assert.equal(isValidProgressItems([]), false);
+  assert.equal(isValidProgressItems(Array(26).fill({ badgeId: 'a', name: 'A' })), false);
+  assert.equal(isValidProgressItems([{ badgeId: 'a' }]), false); // missing name
 });
