@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { login, getSession, logout } from './auth';
 import ResourceManager from './ResourceManager';
 import { BADGE_CATALOG } from './badgeCatalog';
+import * as api from './api';
 
 const catalogEntry = (name) => BADGE_CATALOG.find((b) => b.name === name);
 
@@ -75,10 +76,28 @@ function LoginForm({ onLogin }) {
 
 export default function AdminPage() {
   const [session, setSession] = useState(() => getSession());
+  const [badgesKey, setBadgesKey] = useState(0);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   function handleAuthError() {
     logout();
     setSession(null);
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncStatus(null);
+    try {
+      const result = await api.sync('badges', session.idToken);
+      setSyncStatus(`Synced ${result.synced} earned badge${result.synced === 1 ? '' : 's'} from Builder Center.`);
+      setBadgesKey((k) => k + 1); // remounts ResourceManager so it refetches
+    } catch (err) {
+      if (err.message.startsWith('401')) return handleAuthError();
+      setSyncStatus(`Sync failed: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
   }
 
   if (!session) {
@@ -94,7 +113,15 @@ export default function AdminPage() {
 
       <section>
         <h3>Badges</h3>
+        <p className="sync-row">
+          <button type="button" onClick={handleSync} disabled={syncing}>
+            {syncing ? 'Syncing...' : 'Sync from Builder Center'}
+          </button>
+          <small className="field-hint"> Earned badges only — in-progress badges still need manual entry.</small>
+        </p>
+        {syncStatus && <p className="sync-status">{syncStatus}</p>}
         <ResourceManager
+          key={badgesKey}
           resource="badges"
           idKey="badgeId"
           fields={BADGE_FIELDS}

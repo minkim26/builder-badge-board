@@ -26,3 +26,4 @@ export const create = (resource, data, token) => request('POST', `/${resource}`,
 export const update = (resource, id, data, token) =>
   request('PUT', `/${resource}/${id}`, { token, body: data });
 export const remove = (resource, id, token) => request('DELETE', `/${resource}/${id}`, { token });
+export const sync = (resource, token) => request('POST', `/${resource}/sync`, { token });

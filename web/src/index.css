@@ -220,6 +220,18 @@ section {
   font-weight: normal;
 }
 
+.sync-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.sync-status {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
 .article-list li {
   padding: 8px 0;
   border-bottom: 1px solid var(--border);

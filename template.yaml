@@ -7,6 +7,10 @@ Parameters:
     Type: String
     Default: minsteww26@gmail.com
     Description: Email address to receive AWS cost/usage alerts
+  BuilderProfileId:
+    Type: String
+    Default: b65d0e67-8c3d-4124-8cf2-cbabbf7f4fff
+    Description: AWS Builder Center profile ID (bpId), used by the badge sync endpoint
 
 Globals:
   Function:
@@ -17,6 +21,7 @@ Globals:
       Variables:
         BADGES_TABLE: !Ref BadgesTable
         ARTICLES_TABLE: !Ref ArticlesTable
+        BUILDER_PROFILE_ID: !Ref BuilderProfileId
 
 Resources:
   BadgesTable:
@@ -125,6 +130,21 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+        SyncBadges:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /badges/sync
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        NightlySync:
+          Type: Schedule
+          Properties:
+            # ponytail: fixed UTC offset for PDT: drifts 1hr off true midnight
+            # PT once DST ends in Nov; fine for a personal badge counter.
+            Schedule: "cron(0 7 * * ? *)"
+            Enabled: true
         UpdateBadge:
           Type: HttpApi
           Properties:

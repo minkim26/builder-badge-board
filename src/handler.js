@@ -19,6 +19,13 @@ const TABLES = {
 };
 
 exports.handler = async (event) => {
+  // EventBridge Scheduler invokes the function directly (no API Gateway
+  // envelope) for the nightly sync — everything below this expects a real
+  // HTTP request, so branch off before touching event.requestContext.
+  if (!event.requestContext) {
+    return { synced: await syncBadges() };
+  }
+
   const method = event.requestContext.http.method;
   const [, resource, id] = event.rawPath.split('/');
   const table = TABLES[resource];
@@ -28,6 +35,11 @@ exports.handler = async (event) => {
   }
 
   try {
+    if (method === 'POST' && resource === 'badges' && id === 'sync') {
+      const synced = await syncBadges();
+      return respond(200, { synced });
+    }
+
     if (method === 'GET') {
       const result = await client.send(
         new QueryCommand({
@@ -78,6 +90,45 @@ exports.handler = async (event) => {
     return respond(500, { message: 'Internal error' });
   }
 };
+
+// Pulls earned badges from AWS Builder Center's public rewards API
+// (found via DevTools — undocumented, unauthenticated, no stability
+// guarantee) and upserts them into the Badges table, keyed by AWS's own
+// badgeId so re-syncing overwrites rather than duplicates. Only covers
+// earned badges — no public endpoint for in-progress badges was found,
+// so those still need manual entry via the admin panel.
+async function syncBadges() {
+  const bpId = process.env.BUILDER_PROFILE_ID;
+  let nextToken;
+  let count = 0;
+
+  do {
+    const url = new URL('https://api.builder.aws.com/rms/badges');
+    url.searchParams.set('bpId', bpId);
+    url.searchParams.set('locale', 'en');
+    url.searchParams.set('size', '50');
+    if (nextToken) url.searchParams.set('next', nextToken);
+
+    const res = await fetch(url, { headers: { 'builder-session-token': 'dummy' } });
+    if (!res.ok) throw new Error(`Builder Center API returned ${res.status}`);
+    const data = await res.json();
+
+    for (const awarded of data.awardedBadgeList || []) {
+      const item = {
+        userId: USER_ID,
+        badgeId: awarded.baseBadge.badgeId,
+        name: awarded.baseBadge.displayName,
+        status: 'earned',
+        dateEarned: new Date(awarded.awardedDate * 1000).toISOString().slice(0, 10),
+      };
+      await client.send(new PutCommand({ TableName: TABLES.badges.name, Item: item }));
+      count += 1;
+    }
+    nextToken = data.nextToken;
+  } while (nextToken);
+
+  return count;
+}
 
 function respond(statusCode, body) {
   return {
