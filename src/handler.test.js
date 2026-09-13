@@ -20,12 +20,18 @@ test('returns null when nothing to update', () => {
 });
 
 test('progress-sync accepts a well-formed items array', () => {
-  assert.equal(isValidProgressItems([{ badgeId: 'a', name: 'A' }]), true);
+  assert.equal(isValidProgressItems([{ badgeId: 'a', name: 'A', progress: 1 }]), true);
 });
 
 test('progress-sync rejects a missing/empty/oversized/malformed items array', () => {
   assert.equal(isValidProgressItems(undefined), false);
   assert.equal(isValidProgressItems([]), false);
-  assert.equal(isValidProgressItems(Array(26).fill({ badgeId: 'a', name: 'A' })), false);
-  assert.equal(isValidProgressItems([{ badgeId: 'a' }]), false); // missing name
+  assert.equal(isValidProgressItems(Array(26).fill({ badgeId: 'a', name: 'A', progress: 1 })), false);
+  assert.equal(isValidProgressItems([{ badgeId: 'a', progress: 1 }]), false); // missing name
+});
+
+test('progress-sync rejects a missing/negative/non-numeric progress', () => {
+  assert.equal(isValidProgressItems([{ badgeId: 'a', name: 'A' }]), false); // missing progress
+  assert.equal(isValidProgressItems([{ badgeId: 'a', name: 'A', progress: -1 }]), false);
+  assert.equal(isValidProgressItems([{ badgeId: 'a', name: 'A', progress: 'lots' }]), false);
 });

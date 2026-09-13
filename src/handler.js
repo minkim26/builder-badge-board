@@ -41,22 +41,31 @@ exports.handler = async (event) => {
     }
 
     if (method === 'POST' && resource === 'badges' && id === 'progress-sync') {
-      return progressSync(event);
+      return await progressSync(event);
     }
 
     if (method === 'GET') {
-      const result = await client.send(
-        new QueryCommand({
-          TableName: table.name,
-          KeyConditionExpression: 'userId = :userId',
-          ExpressionAttributeValues: { ':userId': USER_ID },
-        })
-      );
-      return respond(200, result.Items);
+      return respond(200, await queryUserItems(table.name));
     }
 
     if (method === 'POST') {
       const body = JSON.parse(event.body || '{}');
+      if (resource === 'badges') {
+        const existing = await findBadgeByName(body.name);
+        if (existing) {
+          const update = buildUpdateExpression(body, ['userId', 'badgeId']);
+          if (update) {
+            await client.send(
+              new UpdateCommand({
+                TableName: table.name,
+                Key: { userId: USER_ID, badgeId: existing.badgeId },
+                ...update,
+              })
+            );
+          }
+          return respond(200, { ...existing, ...body });
+        }
+      }
       const item = { ...body, userId: USER_ID, [table.idKey]: randomUUID() };
       await client.send(new PutCommand({ TableName: table.name, Item: item }));
       return respond(201, item);
@@ -155,23 +164,53 @@ async function progressSync(event) {
   }
 
   for (const item of body.items) {
-    await client.send(
-      new UpdateCommand({
-        TableName: TABLES.badges.name,
-        Key: { userId: USER_ID, badgeId: item.badgeId },
-        UpdateExpression: 'SET #n = :n, #s = :s, #p = :p, #u = :u',
-        ExpressionAttributeNames: { '#n': 'name', '#s': 'status', '#p': 'progress', '#u': 'updatedAt' },
-        ExpressionAttributeValues: {
-          ':n': item.name,
-          ':s': 'in-progress',
-          ':p': String(item.progress),
-          ':u': new Date().toISOString(),
-        },
-      })
-    );
+    try {
+      await client.send(
+        new UpdateCommand({
+          TableName: TABLES.badges.name,
+          Key: { userId: USER_ID, badgeId: item.badgeId },
+          // Guarded so a stale in-progress reading (e.g. an old browser tab)
+          // can never downgrade a badge that syncBadges() has since marked
+          // earned — earned badges stay owned by that path.
+          UpdateExpression: 'SET #n = :n, #s = :s, #p = :p, #u = :u',
+          ConditionExpression: 'attribute_not_exists(#s) OR #s <> :earned',
+          ExpressionAttributeNames: { '#n': 'name', '#s': 'status', '#p': 'progress', '#u': 'updatedAt' },
+          ExpressionAttributeValues: {
+            ':n': item.name,
+            ':s': 'in-progress',
+            ':p': String(item.progress),
+            ':u': new Date().toISOString(),
+            ':earned': 'earned',
+          },
+        })
+      );
+    } catch (err) {
+      if (err.name !== 'ConditionalCheckFailedException') throw err;
+    }
   }
 
   return respond(200, { synced: body.items.length });
+}
+
+async function queryUserItems(tableName) {
+  const result = await client.send(
+    new QueryCommand({
+      TableName: tableName,
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: { ':userId': USER_ID },
+    })
+  );
+  return result.Items || [];
+}
+
+// Badges are also written by syncBadges()/progressSync(), keyed on Builder
+// Center's own badgeId. Manual admin entry has no way to know that ID ahead
+// of time, so it upserts by name instead — otherwise a badge added by hand
+// (the documented fallback when sync isn't running) and the same badge
+// showing up later via sync would land as two separate records.
+async function findBadgeByName(name) {
+  const items = await queryUserItems(TABLES.badges.name);
+  return items.find((b) => b.name === name);
 }
 
 // Caps at 25 (more than the whole badge catalog) so a leaked sync key
@@ -181,7 +220,16 @@ function isValidProgressItems(items) {
     Array.isArray(items) &&
     items.length > 0 &&
     items.length <= 25 &&
-    items.every((i) => i && typeof i.badgeId === 'string' && i.badgeId && typeof i.name === 'string' && i.name)
+    items.every(
+      (i) =>
+        i &&
+        typeof i.badgeId === 'string' &&
+        i.badgeId &&
+        typeof i.name === 'string' &&
+        i.name &&
+        Number.isFinite(i.progress) &&
+        i.progress >= 0
+    )
   );
 }
 
