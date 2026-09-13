@@ -39,9 +39,12 @@ export default function ResourceManager({ resource, idKey, fields, token, onAuth
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
-    // Drop fields hidden by showIf so switching (e.g. badge name) doesn't
-    // carry over a stale value from a field that's no longer shown.
-    const payload = Object.fromEntries(visibleFields().map((f) => [f.key, values[f.key]]));
+    // The update endpoint only SETs whatever's in the payload, it never
+    // clears anything omitted — so a field hidden by showIf (e.g. progress,
+    // after switching to a badge with no target) needs an explicit null
+    // here, or its old value would silently survive in DynamoDB.
+    const visibleKeys = new Set(visibleFields().map((f) => f.key));
+    const payload = Object.fromEntries(fields.map((f) => [f.key, visibleKeys.has(f.key) ? values[f.key] : null]));
     try {
       if (editingId) {
         const updated = await api.update(resource, editingId, payload, token);
