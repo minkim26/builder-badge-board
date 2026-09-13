@@ -177,6 +177,7 @@ async function progressSync(event) {
     return respond(400, { message: 'Too many distinct badges for this account' });
   }
 
+  let synced = 0;
   for (const item of body.items) {
     try {
       await client.send(
@@ -198,6 +199,7 @@ async function progressSync(event) {
           },
         })
       );
+      synced += 1;
     } catch (err) {
       if (err.name !== 'ConditionalCheckFailedException') throw err;
     }
@@ -205,7 +207,7 @@ async function progressSync(event) {
     await removeStaleDuplicate(existing, item.name, item.badgeId);
   }
 
-  return respond(200, { synced: body.items.length });
+  return respond(200, { synced });
 }
 
 async function queryUserItems(tableName) {
