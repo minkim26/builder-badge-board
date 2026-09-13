@@ -179,6 +179,16 @@ async function progressSync(event) {
 
   let synced = 0;
   for (const item of body.items) {
+    // The per-key ConditionExpression below only protects a badge already
+    // earned under this exact badgeId. It can't stop a stale payload that
+    // reports the same badge under a *different* badgeId (e.g. a manually
+    // entered earned record) — that write would succeed as a new item, and
+    // removeStaleDuplicate would then delete the real earned record as the
+    // "stale" one. Check by name up front to close that path too.
+    if (existing.some((b) => b.name === item.name && b.status === 'earned' && b.badgeId !== item.badgeId)) {
+      continue;
+    }
+
     try {
       await client.send(
         new UpdateCommand({
