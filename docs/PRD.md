@@ -181,6 +181,12 @@ triggers a Lambda that fetches/parses the profile and upserts into DynamoDB.
       runs the request from the extension's own context, bypassing page
       CSP and CORS entirely. First real sync wrote all 9 in-progress
       badges with correct live progress counts.
+
+      Follow-up 2026-09-16: fixed the DST drift flagged above. Switched
+      `NightlySync` from the classic `Schedule` event (`AWS::Events::Rule`,
+      UTC-only) to SAM's `ScheduleV2` event (`AWS::Scheduler::Schedule`),
+      with `ScheduleExpressionTimezone: America/Los_Angeles` so EventBridge
+      Scheduler itself handles the PDT/PST transition.
 - [ ] **7. End-to-end test + article** — test the full flow, take
       screenshots/recording, write the Builder Center article.
 

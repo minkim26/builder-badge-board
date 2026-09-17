@@ -165,12 +165,12 @@ Resources:
             # an interactive login. Protected by the SYNC_KEY shared secret
             # instead, checked in the handler itself.
         NightlySync:
-          Type: Schedule
+          Type: ScheduleV2
           Properties:
-            # ponytail: fixed UTC offset for PDT: drifts 1hr off true midnight
-            # PT once DST ends in Nov; fine for a personal badge counter.
-            Schedule: "cron(0 7 * * ? *)"
-            Enabled: true
+            ScheduleExpression: "cron(0 0 * * ? *)"
+            ScheduleExpressionTimezone: "America/Los_Angeles"
+            State: ENABLED
+            Input: "{}"
         UpdateBadge:
           Type: HttpApi
           Properties:
