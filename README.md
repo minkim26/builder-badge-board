@@ -44,10 +44,14 @@ Backend (Lambda + API Gateway + DynamoDB + Cognito, via SAM):
 
 ```bash
 sam build
-sam deploy --guided   # first time only; no samconfig.toml is committed, so
-                       # subsequent deploys need: sam deploy --stack-name
-                       # builder-badge-board --region us-east-1
+sam deploy --guided   # first time only; subsequent deploys: sam deploy
 ```
+
+Stack name, region, and capabilities live in `samconfig.toml`, so a bare
+`sam deploy` works after the first guided run. `SyncKey` is deliberately left
+out of that file (`NoEcho` only masks console output, not what SAM CLI would
+persist to disk) — pass it explicitly with `--parameter-overrides` whenever
+you're setting or changing it.
 
 Guided deploy will prompt for two parameters: `BuilderProfileId` (your AWS
 Builder Center profile ID, has a default) and `SyncKey` (a secret you make
