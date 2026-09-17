@@ -193,8 +193,7 @@ function LoginForm({ onLogin }) {
 }
 
 export default function AdminPage() {
-  const [session, setSession] = useState(null);
-  const [sessionChecked, setSessionChecked] = useState(false);
+  const [session, setSession] = useState(undefined); // undefined: not checked yet, null: checked, none found
   const [badgesKey, setBadgesKey] = useState(0);
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
@@ -203,10 +202,7 @@ export default function AdminPage() {
   const synced = latestSync(badges);
 
   useEffect(() => {
-    getSession().then((s) => {
-      setSession(s);
-      setSessionChecked(true);
-    });
+    getSession().then(setSession);
   }, []);
 
   function handleAuthError() {
@@ -234,7 +230,7 @@ export default function AdminPage() {
     }
   }
 
-  if (!sessionChecked) {
+  if (session === undefined) {
     return null;
   }
 
