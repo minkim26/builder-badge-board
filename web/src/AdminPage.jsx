@@ -193,13 +193,27 @@ function LoginForm({ onLogin }) {
 }
 
 export default function AdminPage() {
-  const [session, setSession] = useState(() => getSession());
+  const [session, setSession] = useState(undefined); // undefined: not checked yet, null: checked, none found
+  const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
   const [badgesKey, setBadgesKey] = useState(0);
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [badges, setBadges] = useState([]);
   const [timezone, setTimezone] = useState(getStoredTimezone);
   const synced = latestSync(badges);
+
+  // A transient failure throws instead of resolving — surface it as a retry
+  // state rather than mistake it for "not signed in".
+  function checkSession() {
+    getSession()
+      .then((s) => {
+        setSessionCheckFailed(false);
+        setSession(s);
+      })
+      .catch(() => setSessionCheckFailed(true));
+  }
+
+  useEffect(checkSession, []);
 
   function handleAuthError() {
     logout();
@@ -211,11 +225,21 @@ export default function AdminPage() {
     setStoredTimezone(tz);
   }
 
+  // Re-checked (and silently refreshed if expired) right before each
+  // authenticated call, instead of trusting the idToken from state — a tab
+  // left open past the ~1hr ID token lifetime would otherwise keep sending a
+  // stale one and get logged out instead of transparently refreshed.
+  async function currentToken() {
+    const s = await getSession();
+    setSession(s);
+    return s?.idToken;
+  }
+
   async function handleSync() {
     setSyncing(true);
     setSyncStatus(null);
     try {
-      const result = await api.sync('badges', session.idToken);
+      const result = await api.sync('badges', await currentToken());
       setSyncStatus(`Synced ${result.synced} earned badge${result.synced === 1 ? '' : 's'} from Builder Center.`);
       setBadgesKey((k) => k + 1); // remounts ResourceManager so it refetches
     } catch (err) {
@@ -224,6 +248,19 @@ export default function AdminPage() {
     } finally {
       setSyncing(false);
     }
+  }
+
+  if (sessionCheckFailed) {
+    return (
+      <div className="admin-header">
+        <p className="error">Couldn't check your session.</p>
+        <button type="button" onClick={checkSession}>Retry</button>
+      </div>
+    );
+  }
+
+  if (session === undefined) {
+    return null;
   }
 
   if (!session) {
@@ -261,7 +298,7 @@ export default function AdminPage() {
           resource="badges"
           idKey="badgeId"
           fields={BADGE_FIELDS}
-          token={session.idToken}
+          getToken={currentToken}
           onAuthError={handleAuthError}
           onData={setBadges}
         />
@@ -273,7 +310,7 @@ export default function AdminPage() {
           resource="articles"
           idKey="articleId"
           fields={ARTICLE_FIELDS}
-          token={session.idToken}
+          getToken={currentToken}
           onAuthError={handleAuthError}
         />
       </section>

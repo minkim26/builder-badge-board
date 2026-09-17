@@ -88,6 +88,13 @@ Resources:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
+      # ponytail: refresh token lives in localStorage (XSS-readable), so it's
+      # a real bearer credential, not just a convenience. Trimmed from
+      # Cognito's 30-day default to 7 to bound exposure. A proper fix moves
+      # it behind an HttpOnly cookie via a backend-mediated refresh endpoint,
+      # not justified here for a single-admin app with no rendered
+      # user-generated content.
+      RefreshTokenValidity: 7
 
   HttpApi:
     Type: AWS::Serverless::HttpApi

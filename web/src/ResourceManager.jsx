@@ -6,7 +6,7 @@ const emptyValues = (fields) =>
 
 // Generic add/edit/delete list for one resource (badges or articles) — both
 // share the same CRUD shape, just different fields.
-export default function ResourceManager({ resource, idKey, fields, token, onAuthError, onData }) {
+export default function ResourceManager({ resource, idKey, fields, getToken, onAuthError, onData }) {
   const [items, setItems] = useState([]);
   const [editingId, setEditingId] = useState(null); // null = adding new
   const [values, setValues] = useState(emptyValues(fields));
@@ -46,6 +46,7 @@ export default function ResourceManager({ resource, idKey, fields, token, onAuth
     const visibleKeys = new Set(visibleFields().map((f) => f.key));
     const payload = Object.fromEntries(fields.map((f) => [f.key, visibleKeys.has(f.key) ? values[f.key] : null]));
     try {
+      const token = await getToken();
       if (editingId) {
         const updated = await api.update(resource, editingId, payload, token);
         setItems((prev) => prev.map((it) => (it[idKey] === editingId ? updated : it)));
@@ -70,6 +71,7 @@ export default function ResourceManager({ resource, idKey, fields, token, onAuth
   async function handleDelete(id) {
     setError(null);
     try {
+      const token = await getToken();
       await api.remove(resource, id, token);
       setItems((prev) => prev.filter((it) => it[idKey] !== id));
       if (editingId === id) startAdd();
