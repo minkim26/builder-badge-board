@@ -76,6 +76,11 @@ export async function getSession() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshed));
     return refreshed;
   } catch (err) {
+    // A concurrent call (e.g. React StrictMode double-invoking the mount
+    // effect) can already have refreshed this same session by the time this
+    // one fails — check storage before deciding this call failed at all.
+    const current = localStorage.getItem(STORAGE_KEY);
+    if (current !== raw) return current ? JSON.parse(current) : null;
     // Only a rejected credential means the refresh token is actually dead.
     // Anything else (network blip, Cognito 5xx) is transient: rethrow so the
     // caller treats it as "couldn't check right now", not "not signed in" —
@@ -83,13 +88,27 @@ export async function getSession() {
     // the caller to send an unauthenticated request, get a 401, and log out
     // (deleting the very refresh token this branch is trying to keep).
     if (err.cognitoType !== 'NotAuthorizedException') throw err;
-    const current = localStorage.getItem(STORAGE_KEY);
-    if (current !== raw) return current ? JSON.parse(current) : null; // same race as above
     localStorage.removeItem(STORAGE_KEY);
     return null;
   }
 }
 
 export function logout() {
+  const raw = localStorage.getItem(STORAGE_KEY);
   localStorage.removeItem(STORAGE_KEY);
+  const refreshToken = raw && JSON.parse(raw).refreshToken;
+  if (!refreshToken) return;
+  // Best-effort and fire-and-forget: local logout must not wait on or be
+  // undone by this failing. Without it, a refresh token copied via XSS
+  // stays valid at Cognito for the full RefreshTokenValidity (7 days) even
+  // after the legitimate user "logs out" — clearing localStorage alone
+  // only hides the token from this tab, it doesn't revoke it.
+  fetch(IDP_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-amz-json-1.1',
+      'X-Amz-Target': 'AWSCognitoIdentityProviderService.RevokeToken',
+    },
+    body: JSON.stringify({ ClientId: COGNITO_CLIENT_ID, Token: refreshToken }),
+  }).catch(() => {});
 }

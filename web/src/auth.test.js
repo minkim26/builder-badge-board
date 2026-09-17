@@ -95,15 +95,70 @@ test('a logout during an in-flight refresh is not undone once the refresh resolv
   mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: -1 }));
   await login('user', 'pass');
 
-  let resolveFetch;
-  globalThis.fetch = () => new Promise((resolve) => { resolveFetch = resolve; });
+  // logout() below fires its own (RevokeToken) request — resolve that one
+  // immediately so only the refresh request is under manual control here.
+  let resolveRefresh;
+  globalThis.fetch = (_url, options) => {
+    if (options.headers['X-Amz-Target'] === 'AWSCognitoIdentityProviderService.RevokeToken') {
+      return Promise.resolve({ ok: true });
+    }
+    return new Promise((resolve) => { resolveRefresh = resolve; });
+  };
   const pending = getSession(); // refresh now in flight, awaiting the network
 
   logout(); // the user logs out before that refresh comes back
 
-  resolveFetch(authResult({ IdToken: 'id-2', ExpiresIn: 3600 })); // now it resolves, too late
+  resolveRefresh(authResult({ IdToken: 'id-2', ExpiresIn: 3600 })); // now it resolves, too late
   const result = await pending;
 
   assert.equal(result, null); // reflects the post-logout state, not the stale refresh
   assert.equal(localStorage.getItem('bbb_session'), null); // logout wasn't clobbered by the late write
+});
+
+test('a concurrent refresh success is not lost when a second caller fails transiently', async () => {
+  mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: -1 }));
+  await login('user', 'pass');
+
+  // Simulates React StrictMode double-invoking the mount effect: two
+  // getSession() calls race on the same expired session. The first
+  // succeeds and writes storage; the second's own request fails
+  // transiently, but should see the first's success rather than reject.
+  let callCount = 0;
+  let resolveSecond;
+  globalThis.fetch = () => {
+    callCount += 1;
+    if (callCount === 1) return Promise.resolve(authResult({ IdToken: 'id-2', ExpiresIn: 3600 }));
+    return new Promise((resolve) => { resolveSecond = resolve; });
+  };
+
+  const first = getSession();
+  const second = getSession();
+  const firstResult = await first; // first caller's refresh lands in storage
+
+  resolveSecond({ ok: false, json: async () => ({ __type: 'InternalErrorException', message: 'Internal error' }) });
+  const secondResult = await second;
+
+  assert.equal(firstResult.idToken, 'id-2');
+  assert.equal(secondResult.idToken, 'id-2'); // sees the concurrent success instead of throwing
+  logout();
+});
+
+test('logout() clears the local session immediately and revokes the refresh token server-side', async () => {
+  mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: 3600 }));
+  await login('user', 'pass');
+
+  const requests = [];
+  globalThis.fetch = async (_url, options) => {
+    requests.push({ target: options.headers['X-Amz-Target'], body: JSON.parse(options.body) });
+    return { ok: true };
+  };
+
+  logout();
+
+  // Local state is cleared synchronously — not gated on the network call.
+  assert.equal(localStorage.getItem('bbb_session'), null);
+
+  await Promise.resolve(); // let the fire-and-forget revoke request go out
+  assert.equal(requests[0].target, 'AWSCognitoIdentityProviderService.RevokeToken');
+  assert.equal(requests[0].body.Token, 'refresh-1');
 });
