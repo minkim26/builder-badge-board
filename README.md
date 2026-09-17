@@ -44,7 +44,9 @@ Backend (Lambda + API Gateway + DynamoDB + Cognito, via SAM):
 
 ```bash
 sam build
-sam deploy --guided   # first time only; subsequent deploys: sam deploy
+sam deploy --guided   # first time only; no samconfig.toml is committed, so
+                       # subsequent deploys need: sam deploy --stack-name
+                       # builder-badge-board --region us-east-1
 ```
 
 Guided deploy will prompt for two parameters: `BuilderProfileId` (your AWS
