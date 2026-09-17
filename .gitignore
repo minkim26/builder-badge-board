@@ -15,3 +15,5 @@ build/
 
 # stray installer, not part of this project
 AWSCLIV2.pkg
+
+.claude/
