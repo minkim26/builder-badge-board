@@ -28,7 +28,12 @@ exports.handler = async (event) => {
   }
 
   const method = event.requestContext.http.method;
-  const [, resource, id] = event.rawPath.split('/');
+  // rawPath is not URL-decoded, so a %2F-encoded slash in a synced article's
+  // ID (a Builder Center path like /content/abc) survives the split as part
+  // of one segment instead of breaking the route — decode it back to the
+  // real ID before using it as a DynamoDB key. No-op for badgeId/UUIDs.
+  const [, resource, rawId] = event.rawPath.split('/');
+  const id = rawId && decodeURIComponent(rawId);
   const table = TABLES[resource];
 
   if (!table) {

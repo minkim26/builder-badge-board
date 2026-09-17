@@ -23,7 +23,10 @@ async function request(method, path, { token, body } = {}) {
 
 export const list = (resource) => request('GET', `/${resource}`);
 export const create = (resource, data, token) => request('POST', `/${resource}`, { token, body: data });
+// encodeURIComponent because synced article IDs are Builder Center paths
+// (e.g. "/content/abc") — a raw slash would split across route segments and
+// never match /articles/{id}. No-op for badgeId/UUIDs, which have nothing to encode.
 export const update = (resource, id, data, token) =>
-  request('PUT', `/${resource}/${id}`, { token, body: data });
-export const remove = (resource, id, token) => request('DELETE', `/${resource}/${id}`, { token });
+  request('PUT', `/${resource}/${encodeURIComponent(id)}`, { token, body: data });
+export const remove = (resource, id, token) => request('DELETE', `/${resource}/${encodeURIComponent(id)}`, { token });
 export const sync = (resource, token) => request('POST', `/${resource}/sync`, { token });
