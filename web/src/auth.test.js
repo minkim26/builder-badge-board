@@ -74,3 +74,20 @@ test('getSession() throws (not returns null) and preserves the session on a tran
   assert.ok(localStorage.getItem('bbb_session')); // the refresh token itself wasn't thrown away
   logout();
 });
+
+test('a logout during an in-flight refresh is not undone once the refresh resolves', async () => {
+  mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: -1 }));
+  await login('user', 'pass');
+
+  let resolveFetch;
+  globalThis.fetch = () => new Promise((resolve) => { resolveFetch = resolve; });
+  const pending = getSession(); // refresh now in flight, awaiting the network
+
+  logout(); // the user logs out before that refresh comes back
+
+  resolveFetch(authResult({ IdToken: 'id-2', ExpiresIn: 3600 })); // now it resolves, too late
+  const result = await pending;
+
+  assert.equal(result, null); // reflects the post-logout state, not the stale refresh
+  assert.equal(localStorage.getItem('bbb_session'), null); // logout wasn't clobbered by the late write
+});

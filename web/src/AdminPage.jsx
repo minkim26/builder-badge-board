@@ -194,6 +194,7 @@ function LoginForm({ onLogin }) {
 
 export default function AdminPage() {
   const [session, setSession] = useState(undefined); // undefined: not checked yet, null: checked, none found
+  const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
   const [badgesKey, setBadgesKey] = useState(0);
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
@@ -201,12 +202,18 @@ export default function AdminPage() {
   const [timezone, setTimezone] = useState(getStoredTimezone);
   const synced = latestSync(badges);
 
-  useEffect(() => {
-    // A transient failure throws instead of resolving — leave session at its
-    // initial `undefined` (still "checking") rather than mistake it for "not
-    // signed in"; a page reload or the next action retries.
-    getSession().then(setSession).catch(() => {});
-  }, []);
+  // A transient failure throws instead of resolving — surface it as a retry
+  // state rather than mistake it for "not signed in".
+  function checkSession() {
+    getSession()
+      .then((s) => {
+        setSessionCheckFailed(false);
+        setSession(s);
+      })
+      .catch(() => setSessionCheckFailed(true));
+  }
+
+  useEffect(checkSession, []);
 
   function handleAuthError() {
     logout();
@@ -241,6 +248,15 @@ export default function AdminPage() {
     } finally {
       setSyncing(false);
     }
+  }
+
+  if (sessionCheckFailed) {
+    return (
+      <div className="admin-header">
+        <p className="error">Couldn't check your session.</p>
+        <button type="button" onClick={checkSession}>Retry</button>
+      </div>
+    );
   }
 
   if (session === undefined) {

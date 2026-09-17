@@ -61,6 +61,13 @@ export async function getSession() {
       REFRESH_TOKEN: session.refreshToken,
     });
     const refreshed = { ...session, idToken: IdToken, expiresAt: Date.now() + ExpiresIn * 1000 };
+    // A logout or a fresh login can happen while the fetch above was in
+    // flight — storage may no longer hold the session we started with.
+    // Overwriting it unconditionally would resurrect a session the user
+    // just logged out of, or clobber a newer one. Defer to whatever's
+    // actually there now instead of blindly writing over it.
+    const current = localStorage.getItem(STORAGE_KEY);
+    if (current !== raw) return current ? JSON.parse(current) : null;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshed));
     return refreshed;
   } catch (err) {
@@ -71,6 +78,8 @@ export async function getSession() {
     // the caller to send an unauthenticated request, get a 401, and log out
     // (deleting the very refresh token this branch is trying to keep).
     if (err.cognitoType !== 'NotAuthorizedException') throw err;
+    const current = localStorage.getItem(STORAGE_KEY);
+    if (current !== raw) return current ? JSON.parse(current) : null; // same race as above
     localStorage.removeItem(STORAGE_KEY);
     return null;
   }
