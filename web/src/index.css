@@ -135,14 +135,15 @@ section {
 }
 
 .badge-grid,
-.article-list,
+.article-grid,
 .admin-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.badge-grid {
+.badge-grid,
+.article-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -305,12 +306,24 @@ section {
   margin-bottom: 6px;
 }
 
-.article-list li {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+.article-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 220px;
 }
 
-.article-list a {
+.article-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.article-card a {
   color: var(--text-h);
   font-weight: 500;
 }

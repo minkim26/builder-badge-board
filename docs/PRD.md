@@ -56,7 +56,7 @@ Two DynamoDB tables (not single-table design — see Scope above):
 
 - **`Badges`** — badge name, status (`earned` / `in-progress`), date earned
   (if applicable).
-- **`Articles`** — title, URL, publish date, tags.
+- **`Articles`** — title, URL, publish date, tags, thumbnail URL.
 
 Partition key can be a fixed constant or the user's builder ID — this is
 single-user, so key design doesn't need to do more than that.
@@ -188,6 +188,21 @@ triggers a Lambda that fetches/parses the profile and upserts into DynamoDB.
       UTC-only) to SAM's `ScheduleV2` event (`AWS::Scheduler::Schedule`),
       with `ScheduleExpressionTimezone: America/Los_Angeles` so EventBridge
       Scheduler itself handles the PDT/PST transition.
+
+      Follow-up 2026-09-17: brought articles up to sync parity with badges.
+      Same discovery method as the original badges endpoint (DevTools
+      Network tab on the profile's Articles tab) found
+      `GET https://api.builder.aws.com/cs/v2/articles/user/<bpId>?pageSize=N&cursor=...`
+      — public, unauthenticated, same `builder-session-token: dummy`
+      placeholder header, cursor-based pagination instead of badges'
+      `nextToken`. Unlike badges, Builder Center's own `articleId` is known
+      up front, so sync just upserts by that ID with no name-matching
+      reconciliation needed against manually-added entries. Added a
+      `thumbnailUrl` field (from the API's `heroImageUrl`, hotlinked from
+      AWS's own `prod-assets.cosmic.aws.dev` CDN rather than mirrored into
+      this app's own storage) and redesigned the public article list into a
+      card grid to actually show it. Wired into the same nightly schedule
+      and a matching "Sync from Builder Center" button as badges.
 - [ ] **7. End-to-end test + article** — test the full flow, take
       screenshots/recording, write the Builder Center article.
 
