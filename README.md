@@ -73,7 +73,11 @@ In-progress badges need a one-time browser setup instead: see
 [tampermonkey/README.md](tampermonkey/README.md) for the userscript that
 handles it.
 
-Frontend: **not yet connected.** Once an Amplify Hosting app is connected to
-this repo (`amplify.yml` at the repo root is already set up for this),
-pushing to the connected branch will build and deploy automatically. Until
-then, `npm run build --prefix web` only builds locally.
+Frontend: **deployed.** The Amplify Hosting app is connected to this repo
+(`amplify.yml` at the repo root configures the build), and pushes to `main`
+build and deploy automatically. The custom domain
+[https://builder.minkim26.tech](https://builder.minkim26.tech) is attached
+but pending DNS/certificate validation (DNS lives at a third-party registrar,
+not Route 53, so records had to be added by hand — see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)); until that finishes, the app
+is reachable at `https://main.d2xsuyav9vi5h7.amplifyapp.com`.
