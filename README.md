@@ -47,6 +47,12 @@ sam build
 sam deploy --guided   # first time only; subsequent deploys: sam deploy
 ```
 
+Stack name, region, and capabilities live in `samconfig.toml`, so a bare
+`sam deploy` works after the first guided run. `SyncKey` is deliberately left
+out of that file (`NoEcho` only masks console output, not what SAM CLI would
+persist to disk) — pass it explicitly with `--parameter-overrides` whenever
+you're setting or changing it.
+
 Guided deploy will prompt for two parameters: `BuilderProfileId` (your AWS
 Builder Center profile ID, has a default) and `SyncKey` (a secret you make
 up yourself; no default, never commit it).
@@ -71,7 +77,11 @@ In-progress badges need a one-time browser setup instead: see
 [tampermonkey/README.md](tampermonkey/README.md) for the userscript that
 handles it.
 
-Frontend: **not yet connected.** Once an Amplify Hosting app is connected to
-this repo (`amplify.yml` at the repo root is already set up for this),
-pushing to the connected branch will build and deploy automatically. Until
-then, `npm run build --prefix web` only builds locally.
+Frontend: **deployed.** The Amplify Hosting app is connected to this repo
+(`amplify.yml` at the repo root configures the build), and pushes to `main`
+build and deploy automatically. The app is live at
+[https://builder.minkim26.tech](https://builder.minkim26.tech). DNS is
+managed by a third-party registrar rather than Route 53, so the
+certificate-validation and subdomain records were added by hand (see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). It also remains reachable at
+`https://main.d2xsuyav9vi5h7.amplifyapp.com`.

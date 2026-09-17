@@ -22,7 +22,7 @@ covered by the SAM template — see their sections below for why.
 | Service | Role in this system |
 |---|---|
 | **Amplify Hosting** | Builds and hosts the React frontend, connected to a GitHub repo for CI/CD on push. |
-| **Route 53 + ACM** | Custom domain for the Amplify app. Amplify's domain management provisions the ACM cert automatically once a domain is attached. |
+| **ACM (via Amplify)** | Custom domain (`builder.minkim26.tech`) for the Amplify app. The domain is registered at a third-party registrar, not Route 53, so it's managed externally — DNS records (cert validation + subdomain CNAME) are added manually at the registrar. Amplify's domain management provisions the ACM cert automatically once those records are in place. |
 | **Amazon Cognito** | Single-user admin auth. One user pool, one user created manually in the console — no signup flow. |
 | **API Gateway** | HTTP API in front of the Lambda functions; public routes are open, admin (write) routes require a valid Cognito JWT. |
 | **AWS Lambda** | CRUD handlers (list/add/update/delete badges and articles) behind API Gateway. Defined and deployed via the SAM template. |
@@ -36,7 +36,7 @@ covered by the SAM template — see their sections below for why.
 flowchart TD
     Visitor["Visitor / Recruiter"]
     Admin["Admin (the user)"]
-    Amplify["React App\n(Amplify Hosting + Route 53)"]
+    Amplify["React App\n(Amplify Hosting)"]
     Cognito["Cognito User Pool"]
     APIGW["API Gateway"]
     Lambda["CRUD Lambda"]

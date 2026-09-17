@@ -94,8 +94,9 @@ triggers a Lambda that fetches/parses the profile and upserts into DynamoDB.
       touching the frontend.
 - [x] **4. React frontend** — public view (reads from API) + admin view
       (Cognito-gated, can edit).
-- [ ] **5. Deploy** — Amplify Hosting, connect GitHub repo, add custom
-      domain (Route 53 + ACM via Amplify domain management).
+- [x] **5. Deploy** — Amplify Hosting, connect GitHub repo, add custom
+      domain (`builder.minkim26.tech`, registered at a third-party registrar,
+      not Route 53; ACM cert provisioned via Amplify domain management).
 - [x] **6. Scraper investigation** — resolved 2026-09-13. Automated curl/
       WebFetch attempts found nothing (pure client-rendered SPA, no
       server-rendered HTML or embedded JSON — guessed REST paths under

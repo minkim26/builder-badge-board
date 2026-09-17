@@ -93,9 +93,10 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       CorsConfiguration:
-        # ponytail: wildcard origin, tighten to the deployed Amplify domain once known
         AllowOrigins:
-          - "*"
+          - "https://builder.minkim26.tech"
+          - "https://main.d2xsuyav9vi5h7.amplifyapp.com"
+          - "http://localhost:5173"
         AllowMethods:
           - GET
           - POST
