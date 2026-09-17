@@ -23,7 +23,8 @@ exports.handler = async (event) => {
   // envelope) for the nightly sync — everything below this expects a real
   // HTTP request, so branch off before touching event.requestContext.
   if (!event.requestContext) {
-    return { synced: await syncBadges() };
+    const [badges, articles] = await Promise.all([syncBadges(), syncArticles()]);
+    return { badges, articles };
   }
 
   const method = event.requestContext.http.method;
@@ -37,6 +38,11 @@ exports.handler = async (event) => {
   try {
     if (method === 'POST' && resource === 'badges' && id === 'sync') {
       const synced = await syncBadges();
+      return respond(200, { synced });
+    }
+
+    if (method === 'POST' && resource === 'articles' && id === 'sync') {
+      const synced = await syncArticles();
       return respond(200, { synced });
     }
 
@@ -144,6 +150,55 @@ async function syncBadges() {
   } while (nextToken);
 
   return count;
+}
+
+// Pulls published articles from AWS Builder Center's public content API
+// (same discovery method as syncBadges: found via DevTools, unauthenticated,
+// no stability guarantee) and upserts them into the Articles table, keyed by
+// Builder Center's own articleId so re-syncing overwrites rather than
+// duplicates. Unlike badges, that ID is stable and known up front, so there's
+// no name-matching reconciliation needed against manually-added entries.
+async function syncArticles() {
+  const bpId = process.env.BUILDER_PROFILE_ID;
+  let cursor;
+  let count = 0;
+
+  do {
+    const url = new URL(`https://api.builder.aws.com/cs/v2/articles/user/${bpId}`);
+    url.searchParams.set('pageSize', '50');
+    if (cursor) url.searchParams.set('cursor', cursor);
+
+    const res = await fetch(url, { headers: { 'builder-session-token': 'dummy' } });
+    if (!res.ok) throw new Error(`Builder Center API returned ${res.status}`);
+    const data = await res.json();
+
+    for (const article of data.articles || []) {
+      if (article.status !== 'LIVE') continue; // skip drafts, if this endpoint ever returns them
+      await client.send(new PutCommand({ TableName: TABLES.articles.name, Item: toArticleItem(article) }));
+      count += 1;
+    }
+    cursor = data.cursor;
+  } while (cursor);
+
+  return count;
+}
+
+// Maps one Builder Center article into this app's Articles item shape. Pure
+// (no I/O) so it's unit-testable without mocking fetch/DynamoDB, same as
+// buildUpdateExpression/isValidProgressItems below.
+function toArticleItem(article) {
+  return {
+    userId: USER_ID,
+    articleId: article.articleId,
+    title: article.title,
+    url: `https://builder.aws.com${article.uri}`,
+    // lastPublishedAt is epoch milliseconds already, unlike badges'
+    // awardedDate (epoch seconds) — no *1000 here.
+    publishDate: new Date(article.lastPublishedAt).toISOString().slice(0, 10),
+    tags: (article.tags || []).join(', '), // PublicPage.jsx renders this as a plain string, same as manual entries
+    thumbnailUrl: article.heroImageUrl,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 // Receives in-progress badge counts from the Tampermonkey userscript
@@ -298,3 +353,4 @@ function buildUpdateExpression(body, excludeKeys) {
 
 module.exports.buildUpdateExpression = buildUpdateExpression;
 module.exports.isValidProgressItems = isValidProgressItems;
+module.exports.toArticleItem = toArticleItem;

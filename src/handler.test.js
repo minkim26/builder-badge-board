@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildUpdateExpression, isValidProgressItems } = require('./handler');
+const { buildUpdateExpression, isValidProgressItems, toArticleItem } = require('./handler');
 
 test('builds SET expression for updatable fields', () => {
   const result = buildUpdateExpression({ status: 'earned', dateEarned: '2026-09-12' }, ['userId', 'badgeId']);
@@ -34,4 +34,42 @@ test('progress-sync rejects a missing/negative/non-numeric progress', () => {
   assert.equal(isValidProgressItems([{ badgeId: 'a', name: 'A' }]), false); // missing progress
   assert.equal(isValidProgressItems([{ badgeId: 'a', name: 'A', progress: -1 }]), false);
   assert.equal(isValidProgressItems([{ badgeId: 'a', name: 'A', progress: 'lots' }]), false);
+});
+
+test('toArticleItem converts lastPublishedAt (epoch ms) to a plain date string', () => {
+  const item = toArticleItem({
+    articleId: '/content/abc',
+    title: 'Some Article',
+    uri: '/content/abc/some-article',
+    lastPublishedAt: 1789357828961,
+    tags: ['aws', 'serverless'],
+    heroImageUrl: 'https://prod-assets.cosmic.aws.dev/a/abc/hero.webp',
+  });
+  assert.equal(item.publishDate, new Date(1789357828961).toISOString().slice(0, 10));
+});
+
+test('toArticleItem joins tags into the comma-separated string PublicPage.jsx expects', () => {
+  const item = toArticleItem({
+    articleId: '/content/abc',
+    title: 'Some Article',
+    uri: '/content/abc/some-article',
+    lastPublishedAt: 1789357828961,
+    tags: ['aws', 'serverless'],
+    heroImageUrl: 'https://prod-assets.cosmic.aws.dev/a/abc/hero.webp',
+  });
+  assert.equal(item.tags, 'aws, serverless');
+});
+
+test('toArticleItem builds the full URL and carries the thumbnail through', () => {
+  const item = toArticleItem({
+    articleId: '/content/abc',
+    title: 'Some Article',
+    uri: '/content/abc/some-article',
+    lastPublishedAt: 1789357828961,
+    tags: [],
+    heroImageUrl: 'https://prod-assets.cosmic.aws.dev/a/abc/hero.webp',
+  });
+  assert.equal(item.url, 'https://builder.aws.com/content/abc/some-article');
+  assert.equal(item.thumbnailUrl, 'https://prod-assets.cosmic.aws.dev/a/abc/hero.webp');
+  assert.equal(item.articleId, '/content/abc');
 });
