@@ -209,6 +209,14 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+        SyncArticles:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /articles/sync
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
         UpdateArticle:
           Type: HttpApi
           Properties:
