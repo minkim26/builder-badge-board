@@ -164,7 +164,7 @@ Resources:
             # No Cognito authorizer — the Tampermonkey userscript can't do
             # an interactive login. Protected by the SYNC_KEY shared secret
             # instead, checked in the handler itself.
-        NightlySync:
+        NightlySyncV2:
           Type: ScheduleV2
           Properties:
             ScheduleExpression: "cron(0 0 * * ? *)"
