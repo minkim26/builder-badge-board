@@ -27,7 +27,7 @@ covered by the SAM template — see their sections below for why.
 | **API Gateway** | HTTP API in front of the Lambda functions; public routes are open, admin (write) routes require a valid Cognito JWT. |
 | **AWS Lambda** | CRUD handlers (list/add/update/delete badges and articles) behind API Gateway. Defined and deployed via the SAM template. |
 | **DynamoDB** | Two tables, `Badges` and `Articles` — see `PRD.md` Data Model. |
-| **EventBridge Scheduler** *(conditional)* | If the scraper investigation (see `PRD.md`) turns up a viable endpoint, triggers a scraper Lambda on a schedule (daily or ~12h). |
+| **EventBridge Scheduler** | Triggers the same CRUD Lambda directly (no API Gateway) once nightly at midnight PT, running both `syncBadges()` and `syncArticles()` against Builder Center's public content API. See Data Flow below. |
 | **Amazon Bedrock / Nova** *(stretch, optional)* | Generates a short AI summary of the user's builder journey from badge data. Not required to qualify for the challenge. |
 
 ## Architecture Flow
@@ -41,27 +41,31 @@ flowchart TD
     APIGW["API Gateway"]
     Lambda["CRUD Lambda"]
     DDB[("DynamoDB\nBadges / Articles")]
-    EventBridge["EventBridge Scheduler\n(optional)"]
-    ScraperLambda["Scraper Lambda\n(optional)"]
-    Profile["Builder Center Profile\n(external, optional)"]
+    EventBridge["EventBridge Scheduler\n(nightly, midnight PT)"]
+    BuilderAPI["Builder Center\npublic content API"]
+    Tampermonkey["Tampermonkey userscript\n(admin's browser, optional)"]
 
     Visitor -->|read-only| Amplify
     Admin -->|login| Cognito
     Admin --> Amplify
     Cognito -->|JWT| APIGW
-    Amplify -->|read + write requests| APIGW
+    Amplify -->|read + write requests, incl. sync buttons| APIGW
     APIGW --> Lambda
     Lambda --> DDB
 
-    EventBridge -.-> ScraperLambda
-    ScraperLambda -.->|fetch/parse| Profile
-    ScraperLambda -.->|upsert| DDB
+    EventBridge -->|direct invoke, no API Gateway| Lambda
+    Lambda -->|fetch earned badges + published articles| BuilderAPI
+    Tampermonkey -->|in-progress badges only, SYNC_KEY not JWT| APIGW
 ```
 
 Public read paths and the admin write path share the same API Gateway + CRUD
 Lambda layer; the difference is whether the request carries a valid Cognito
-JWT. The scraper path (dashed, optional) is entirely separate and only
-writes to DynamoDB — it never goes through API Gateway.
+JWT. The nightly sync and the two manual "Sync from Builder Center" buttons
+(`POST /badges/sync`, `POST /articles/sync`) all run the same Lambda code —
+the only difference is what invokes it. The Tampermonkey path is the one
+exception: it covers only in-progress badges, which have no public API (see
+Data Flow below), and writes through a `SYNC_KEY`-protected route instead of
+a Cognito JWT, since the userscript can't do an interactive login.
 
 ## Auth Flow (Cognito)
 
@@ -89,15 +93,36 @@ writes to DynamoDB — it never goes through API Gateway.
    via the AWS SDK.
 4. Response returns through API Gateway to the frontend.
 
-**Scraper path (conditional on investigation outcome — see `PRD.md`)**
-1. EventBridge Scheduler triggers the scraper Lambda on a fixed schedule.
-2. Lambda fetches the builder profile — either a discovered internal JSON
-   endpoint, or server-rendered HTML parsed with Cheerio.
-3. Lambda transforms the response into badge/article records and upserts
-   them into DynamoDB.
-4. No interaction with API Gateway or the frontend — this path only ever
-   writes to the same tables the CRUD path reads from.
+**Sync path (badges and articles, nightly + on-demand)**
 
-If the investigation concludes a scraper isn't feasible this weekend, this
-path is not built, and all writes to DynamoDB come from the admin CRUD path
-instead.
+Both badge and article sync call real, undocumented, unauthenticated
+Builder Center endpoints — found via Chrome DevTools while browsing the
+site, not published anywhere. Neither needs a real session credential, just
+a placeholder `builder-session-token: dummy` header; both have zero
+stability guarantee and could change or get blocked without notice. See
+`PRD.md`'s Build Plan for how each was found and the tradeoffs involved.
+
+1. Triggered either by EventBridge Scheduler (nightly, direct Lambda
+   invoke, no API Gateway) or by clicking "Sync from Builder Center" in the
+   admin panel (`POST /badges/sync` or `POST /articles/sync`, Cognito JWT
+   required, same as any other write route).
+2. `syncBadges()` calls `GET api.builder.aws.com/rms/badges?bpId=...` for
+   earned badges; `syncArticles()` calls
+   `GET api.builder.aws.com/cs/v2/articles/user/{bpId}` for published
+   articles. Both paginate (`nextToken` / `cursor` respectively) until
+   exhausted.
+3. Each response item is transformed and upserted into DynamoDB, keyed by
+   Builder Center's own ID (`badgeId` / `articleId`) so re-syncing is
+   idempotent.
+4. No interaction with the frontend either way — sync only ever writes to
+   the same tables the CRUD path reads from.
+
+**In-progress badges are the one gap neither sync path covers** — no public
+endpoint returns them; the data only ever appears on a private,
+logged-in-only dashboard page. Automated instead via a Tampermonkey
+userscript (`tampermonkey/progress-sync.user.js`) that runs in the admin's
+own browser, passively watching `fetch` responses while they browse
+normally and forwarding in-progress counts to a `SYNC_KEY`-protected route
+(no Cognito — the userscript can't do an interactive login). Manual entry
+via the admin panel remains the fallback for whenever a matching tab isn't
+open.
