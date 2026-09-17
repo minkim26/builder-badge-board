@@ -153,7 +153,34 @@ const ARTICLE_FIELDS = [
   { key: 'url', label: 'URL', type: 'url' },
   { key: 'publishDate', label: 'Publish Date', type: 'date' },
   { key: 'tags', label: 'Tags (comma-separated)', type: 'text' },
+  { key: 'thumbnailUrl', label: 'Thumbnail URL', type: 'url' },
 ];
+
+// Badges and articles both hit POST /{resource}/sync and need the same
+// syncing/status/remount-key dance around it — shared here instead of
+// duplicated per resource.
+function useResourceSync(resource, noun, currentToken, onAuthError) {
+  const [syncing, setSyncing] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [key, setKey] = useState(0);
+
+  async function handleSync() {
+    setSyncing(true);
+    setStatus(null);
+    try {
+      const result = await api.sync(resource, await currentToken());
+      setStatus(`Synced ${result.synced} ${noun}${result.synced === 1 ? '' : 's'} from Builder Center.`);
+      setKey((k) => k + 1); // remounts ResourceManager so it refetches
+    } catch (err) {
+      if (err.message.startsWith('401')) return onAuthError();
+      setStatus(`Sync failed: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return { syncing, status, key, handleSync };
+}
 
 function LoginForm({ onLogin }) {
   const [username, setUsername] = useState('');
@@ -195,12 +222,11 @@ function LoginForm({ onLogin }) {
 export default function AdminPage() {
   const [session, setSession] = useState(undefined); // undefined: not checked yet, null: checked, none found
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
-  const [badgesKey, setBadgesKey] = useState(0);
-  const [syncStatus, setSyncStatus] = useState(null);
-  const [syncing, setSyncing] = useState(false);
   const [badges, setBadges] = useState([]);
+  const [articles, setArticles] = useState([]);
   const [timezone, setTimezone] = useState(getStoredTimezone);
   const synced = latestSync(badges);
+  const articleSynced = latestSync(articles);
 
   // A transient failure throws instead of resolving — surface it as a retry
   // state rather than mistake it for "not signed in".
@@ -235,20 +261,8 @@ export default function AdminPage() {
     return s?.idToken;
   }
 
-  async function handleSync() {
-    setSyncing(true);
-    setSyncStatus(null);
-    try {
-      const result = await api.sync('badges', await currentToken());
-      setSyncStatus(`Synced ${result.synced} earned badge${result.synced === 1 ? '' : 's'} from Builder Center.`);
-      setBadgesKey((k) => k + 1); // remounts ResourceManager so it refetches
-    } catch (err) {
-      if (err.message.startsWith('401')) return handleAuthError();
-      setSyncStatus(`Sync failed: ${err.message}`);
-    } finally {
-      setSyncing(false);
-    }
-  }
+  const badgeSync = useResourceSync('badges', 'earned badge', currentToken, handleAuthError);
+  const articleSync = useResourceSync('articles', 'article', currentToken, handleAuthError);
 
   if (sessionCheckFailed) {
     return (
@@ -285,16 +299,16 @@ export default function AdminPage() {
       <section>
         <h3>Badges</h3>
         <p className="sync-row">
-          <button type="button" onClick={handleSync} disabled={syncing}>
-            {syncing ? 'Syncing...' : 'Sync from Builder Center'}
+          <button type="button" onClick={badgeSync.handleSync} disabled={badgeSync.syncing}>
+            {badgeSync.syncing ? 'Syncing...' : 'Sync from Builder Center'}
           </button>
           <small className="field-hint"> Earned badges only — in-progress badges sync via the Tampermonkey script below.</small>
         </p>
-        {syncStatus && <p className="sync-status">{syncStatus}</p>}
+        {badgeSync.status && <p className="sync-status">{badgeSync.status}</p>}
         {synced && <p className="sync-meta">Last synced {formatTimestamp(synced, timezone)}</p>}
         <ProgressSyncSetup />
         <ResourceManager
-          key={badgesKey}
+          key={badgeSync.key}
           resource="badges"
           idKey="badgeId"
           fields={BADGE_FIELDS}
@@ -306,12 +320,21 @@ export default function AdminPage() {
 
       <section>
         <h3>Articles</h3>
+        <p className="sync-row">
+          <button type="button" onClick={articleSync.handleSync} disabled={articleSync.syncing}>
+            {articleSync.syncing ? 'Syncing...' : 'Sync from Builder Center'}
+          </button>
+        </p>
+        {articleSync.status && <p className="sync-status">{articleSync.status}</p>}
+        {articleSynced && <p className="sync-meta">Last synced {formatTimestamp(articleSynced, timezone)}</p>}
         <ResourceManager
+          key={articleSync.key}
           resource="articles"
           idKey="articleId"
           fields={ARTICLE_FIELDS}
           getToken={currentToken}
           onAuthError={handleAuthError}
+          onData={setArticles}
         />
       </section>
     </div>
