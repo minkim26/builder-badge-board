@@ -75,9 +75,9 @@ handles it.
 
 Frontend: **deployed.** The Amplify Hosting app is connected to this repo
 (`amplify.yml` at the repo root configures the build), and pushes to `main`
-build and deploy automatically. The custom domain
-[https://builder.minkim26.tech](https://builder.minkim26.tech) is attached
-but pending DNS/certificate validation (DNS lives at a third-party registrar,
-not Route 53, so records had to be added by hand — see
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)); until that finishes, the app
-is reachable at `https://main.d2xsuyav9vi5h7.amplifyapp.com`.
+build and deploy automatically. The app is live at
+[https://builder.minkim26.tech](https://builder.minkim26.tech). DNS is
+managed by a third-party registrar rather than Route 53, so the
+certificate-validation and subdomain records were added by hand (see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). It also remains reachable at
+`https://main.d2xsuyav9vi5h7.amplifyapp.com`.
