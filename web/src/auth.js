@@ -37,10 +37,13 @@ export async function login(username, password) {
   return session;
 }
 
-// Silent refresh: the ID token is good for ~1hr, the refresh token for 30
-// days (App Client default), so this keeps the admin signed in across many
-// hourly expirations without ever prompting for a password again — only a
-// dead/expired refresh token forces a real re-login.
+// Silent refresh: the ID token is good for ~1hr, the refresh token for 7
+// days (RefreshTokenValidity in template.yaml), so this keeps the admin
+// signed in across many hourly expirations without ever prompting for a
+// password again — only a dead/expired refresh token forces a real
+// re-login. A transient failure (network blip, Cognito 5xx) throws instead
+// of returning null, so callers don't mistake "couldn't check right now"
+// for "not signed in" and log out a perfectly good session.
 export async function getSession() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
@@ -61,11 +64,14 @@ export async function getSession() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshed));
     return refreshed;
   } catch (err) {
-    // Only a rejected credential means the refresh token is actually dead —
-    // a network blip or a Cognito 5xx shouldn't destroy a still-good one.
-    if (err.cognitoType === 'NotAuthorizedException') {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    // Only a rejected credential means the refresh token is actually dead.
+    // Anything else (network blip, Cognito 5xx) is transient: rethrow so the
+    // caller treats it as "couldn't check right now", not "not signed in" —
+    // returning null here would look identical to a dead session and lead
+    // the caller to send an unauthenticated request, get a 401, and log out
+    // (deleting the very refresh token this branch is trying to keep).
+    if (err.cognitoType !== 'NotAuthorizedException') throw err;
+    localStorage.removeItem(STORAGE_KEY);
     return null;
   }
 }

@@ -202,7 +202,10 @@ export default function AdminPage() {
   const synced = latestSync(badges);
 
   useEffect(() => {
-    getSession().then(setSession);
+    // A transient failure throws instead of resolving — leave session at its
+    // initial `undefined` (still "checking") rather than mistake it for "not
+    // signed in"; a page reload or the next action retries.
+    getSession().then(setSession).catch(() => {});
   }, []);
 
   function handleAuthError() {

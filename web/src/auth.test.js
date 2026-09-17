@@ -63,12 +63,14 @@ test('getSession() clears storage and returns null when the refresh token is dea
   assert.equal(localStorage.getItem('bbb_session'), null);
 });
 
-test('getSession() preserves the stored session on a transient refresh failure', async () => {
+test('getSession() throws (not returns null) and preserves the session on a transient refresh failure', async () => {
   mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: -1 }));
   await login('user', 'pass');
   mockFetch({ ok: false, json: async () => ({ __type: 'InternalErrorException', message: 'Internal error' }) });
-  const session = await getSession();
-  assert.equal(session, null); // this call still has no valid idToken to hand back
-  assert.ok(localStorage.getItem('bbb_session')); // but the refresh token itself wasn't thrown away
+  // Rejecting (rather than resolving to null) matters: a caller that treated
+  // this the same as "no session" would send an unauthenticated request,
+  // get a 401, and log out — deleting the refresh token this is meant to keep.
+  await assert.rejects(() => getSession(), /Internal error/);
+  assert.ok(localStorage.getItem('bbb_session')); // the refresh token itself wasn't thrown away
   logout();
 });
