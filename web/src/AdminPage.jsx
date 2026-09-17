@@ -215,11 +215,21 @@ export default function AdminPage() {
     setStoredTimezone(tz);
   }
 
+  // Re-checked (and silently refreshed if expired) right before each
+  // authenticated call, instead of trusting the idToken from state — a tab
+  // left open past the ~1hr ID token lifetime would otherwise keep sending a
+  // stale one and get logged out instead of transparently refreshed.
+  async function currentToken() {
+    const s = await getSession();
+    setSession(s);
+    return s?.idToken;
+  }
+
   async function handleSync() {
     setSyncing(true);
     setSyncStatus(null);
     try {
-      const result = await api.sync('badges', session.idToken);
+      const result = await api.sync('badges', await currentToken());
       setSyncStatus(`Synced ${result.synced} earned badge${result.synced === 1 ? '' : 's'} from Builder Center.`);
       setBadgesKey((k) => k + 1); // remounts ResourceManager so it refetches
     } catch (err) {
@@ -269,7 +279,7 @@ export default function AdminPage() {
           resource="badges"
           idKey="badgeId"
           fields={BADGE_FIELDS}
-          token={session.idToken}
+          getToken={currentToken}
           onAuthError={handleAuthError}
           onData={setBadges}
         />
@@ -281,7 +291,7 @@ export default function AdminPage() {
           resource="articles"
           idKey="articleId"
           fields={ARTICLE_FIELDS}
-          token={session.idToken}
+          getToken={currentToken}
           onAuthError={handleAuthError}
         />
       </section>

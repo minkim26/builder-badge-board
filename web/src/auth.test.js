@@ -39,8 +39,16 @@ test('getSession() returns the stored session unchanged while still valid', asyn
 test('getSession() silently refreshes an expired ID token using the refresh token', async () => {
   mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: -1 })); // already expired
   await login('user', 'pass');
-  mockFetch(authResult({ IdToken: 'id-2', ExpiresIn: 3600 })); // REFRESH_TOKEN_AUTH response
+
+  const requests = [];
+  globalThis.fetch = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return authResult({ IdToken: 'id-2', ExpiresIn: 3600 });
+  };
   const session = await getSession();
+
+  assert.equal(requests[0].AuthFlow, 'REFRESH_TOKEN_AUTH');
+  assert.deepEqual(requests[0].AuthParameters, { REFRESH_TOKEN: 'refresh-1' });
   assert.equal(session.idToken, 'id-2');
   assert.equal(session.refreshToken, 'refresh-1'); // preserved, not rotated
   logout();
@@ -49,8 +57,18 @@ test('getSession() silently refreshes an expired ID token using the refresh toke
 test('getSession() clears storage and returns null when the refresh token is dead', async () => {
   mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: -1 }));
   await login('user', 'pass');
-  mockFetch({ ok: false, json: async () => ({ message: 'Refresh Token has expired' }) });
+  mockFetch({ ok: false, json: async () => ({ __type: 'NotAuthorizedException', message: 'Refresh Token has expired' }) });
   const session = await getSession();
   assert.equal(session, null);
   assert.equal(localStorage.getItem('bbb_session'), null);
+});
+
+test('getSession() preserves the stored session on a transient refresh failure', async () => {
+  mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: -1 }));
+  await login('user', 'pass');
+  mockFetch({ ok: false, json: async () => ({ __type: 'InternalErrorException', message: 'Internal error' }) });
+  const session = await getSession();
+  assert.equal(session, null); // this call still has no valid idToken to hand back
+  assert.ok(localStorage.getItem('bbb_session')); // but the refresh token itself wasn't thrown away
+  logout();
 });

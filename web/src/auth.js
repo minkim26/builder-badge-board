@@ -20,7 +20,9 @@ async function initiateAuth(authFlow, authParameters) {
   const data = await res.json();
   if (!res.ok || !data.AuthenticationResult) {
     // e.g. NEW_PASSWORD_REQUIRED on login — not expected since the admin already set a password
-    throw new Error(data.message || (data.ChallengeName ? `Unexpected challenge: ${data.ChallengeName}` : 'Auth failed'));
+    const err = new Error(data.message || (data.ChallengeName ? `Unexpected challenge: ${data.ChallengeName}` : 'Auth failed'));
+    err.cognitoType = data.__type; // e.g. "NotAuthorizedException" — distinguishes a rejected credential from a transient failure
+    throw err;
   }
   return data.AuthenticationResult;
 }
@@ -58,8 +60,12 @@ export async function getSession() {
     const refreshed = { ...session, idToken: IdToken, expiresAt: Date.now() + ExpiresIn * 1000 };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshed));
     return refreshed;
-  } catch {
-    localStorage.removeItem(STORAGE_KEY);
+  } catch (err) {
+    // Only a rejected credential means the refresh token is actually dead —
+    // a network blip or a Cognito 5xx shouldn't destroy a still-good one.
+    if (err.cognitoType === 'NotAuthorizedException') {
+      localStorage.removeItem(STORAGE_KEY);
+    }
     return null;
   }
 }
