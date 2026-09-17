@@ -2,6 +2,11 @@ import { COGNITO_REGION, COGNITO_CLIENT_ID } from './config.js';
 
 const IDP_URL = `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/`;
 const STORAGE_KEY = 'bbb_session';
+// A token that expires mid-flight (checked valid, then rejected by the time
+// the request lands) triggers the same logout/refresh-token-loss path as a
+// genuinely dead session. Treating it as expired this much early trades a
+// negligible amount of the ~1hr lifetime for never racing a real request.
+const EXPIRY_BUFFER_MS = 60_000;
 
 // Plain InitiateAuth call — no aws-amplify needed since both flows below are
 // a single unsigned JSON POST. The Cognito authorizer on the API checks the
@@ -48,7 +53,7 @@ export async function getSession() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   const session = JSON.parse(raw);
-  if (session.expiresAt >= Date.now()) return session;
+  if (session.expiresAt - EXPIRY_BUFFER_MS >= Date.now()) return session;
   if (!session.refreshToken) {
     localStorage.removeItem(STORAGE_KEY);
     return null;
