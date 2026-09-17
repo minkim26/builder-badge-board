@@ -193,13 +193,21 @@ function LoginForm({ onLogin }) {
 }
 
 export default function AdminPage() {
-  const [session, setSession] = useState(() => getSession());
+  const [session, setSession] = useState(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [badgesKey, setBadgesKey] = useState(0);
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [badges, setBadges] = useState([]);
   const [timezone, setTimezone] = useState(getStoredTimezone);
   const synced = latestSync(badges);
+
+  useEffect(() => {
+    getSession().then((s) => {
+      setSession(s);
+      setSessionChecked(true);
+    });
+  }, []);
 
   function handleAuthError() {
     logout();
@@ -224,6 +232,10 @@ export default function AdminPage() {
     } finally {
       setSyncing(false);
     }
+  }
+
+  if (!sessionChecked) {
+    return null;
   }
 
   if (!session) {
