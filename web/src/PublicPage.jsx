@@ -75,16 +75,17 @@ export default function PublicPage() {
       <section>
         <h2>Articles</h2>
         {articles.length === 0 && !error && <p>No articles yet.</p>}
-        <ul className="article-list">
+        <ul className="article-grid">
           {articles.map((a) => (
-            <li key={a.articleId}>
+            <li key={a.articleId} className="article-card">
+              {a.thumbnailUrl && <img className="article-thumb" src={a.thumbnailUrl} alt="" />}
               {isSafeUrl(a.url) ? (
                 <a href={a.url} target="_blank" rel="noopener noreferrer">{a.title}</a>
               ) : (
                 <span>{a.title}</span>
               )}
-              {a.publishDate && <span className="article-date"> · {a.publishDate}</span>}
-              {a.tags && <span className="article-tags"> · {a.tags}</span>}
+              {a.publishDate && <span className="article-date">{a.publishDate}</span>}
+              {a.tags && <span className="article-tags">{a.tags}</span>}
             </li>
           ))}
         </ul>
