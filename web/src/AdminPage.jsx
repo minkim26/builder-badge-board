@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { login, getSession, logout } from './auth';
 import ResourceManager from './ResourceManager';
 import { BADGE_CATALOG, catalogEntry, latestSync } from './badgeCatalog';
@@ -227,6 +227,7 @@ export default function AdminPage() {
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [timezoneError, setTimezoneError] = useState(null);
   const [timezoneSaving, setTimezoneSaving] = useState(false);
+  const timezoneEditedRef = useRef(false);
   const synced = latestSync(badges);
   const articleSynced = latestSync(articles);
 
@@ -245,8 +246,13 @@ export default function AdminPage() {
 
   // Public read, independent of login — the public page reads this same
   // setting, so it's the site-wide source of truth, not a per-browser one.
+  // Guarded by timezoneEditedRef: if the admin changes the timezone before
+  // this resolves, applying it would overwrite that edit with the stale
+  // value this request started with.
   useEffect(() => {
-    api.getSettings().then((s) => setTimezone(s.timezone)).catch(() => {});
+    api.getSettings().then((s) => {
+      if (!timezoneEditedRef.current) setTimezone(s.timezone);
+    }).catch(() => {});
   }, []);
 
   function handleAuthError() {
@@ -258,6 +264,8 @@ export default function AdminPage() {
   // change can't fire before the first PUT resolves — otherwise an
   // out-of-order response could leave the saved value behind what's shown.
   async function handleTimezoneChange(tz) {
+    const previous = timezone;
+    timezoneEditedRef.current = true;
     setTimezone(tz);
     setTimezoneError(null);
     setTimezoneSaving(true);
@@ -265,6 +273,7 @@ export default function AdminPage() {
       await api.updateSettings({ timezone: tz }, await currentToken());
     } catch (err) {
       if (err.message.startsWith('401')) return handleAuthError();
+      setTimezone(previous);
       setTimezoneError('Failed to save — try again.');
     } finally {
       setTimezoneSaving(false);
