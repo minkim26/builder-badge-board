@@ -76,11 +76,6 @@ export async function getSession() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshed));
     return refreshed;
   } catch (err) {
-    // A concurrent call (e.g. React StrictMode double-invoking the mount
-    // effect) can already have refreshed this same session by the time this
-    // one fails — check storage before deciding this call failed at all.
-    const current = localStorage.getItem(STORAGE_KEY);
-    if (current !== raw) return current ? JSON.parse(current) : null;
     // Only a rejected credential means the refresh token is actually dead.
     // Anything else (network blip, Cognito 5xx) is transient: rethrow so the
     // caller treats it as "couldn't check right now", not "not signed in" —

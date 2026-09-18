@@ -115,34 +115,6 @@ test('a logout during an in-flight refresh is not undone once the refresh resolv
   assert.equal(localStorage.getItem('bbb_session'), null); // logout wasn't clobbered by the late write
 });
 
-test('a concurrent refresh success is not lost when a second caller fails transiently', async () => {
-  mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: -1 }));
-  await login('user', 'pass');
-
-  // Simulates React StrictMode double-invoking the mount effect: two
-  // getSession() calls race on the same expired session. The first
-  // succeeds and writes storage; the second's own request fails
-  // transiently, but should see the first's success rather than reject.
-  let callCount = 0;
-  let resolveSecond;
-  globalThis.fetch = () => {
-    callCount += 1;
-    if (callCount === 1) return Promise.resolve(authResult({ IdToken: 'id-2', ExpiresIn: 3600 }));
-    return new Promise((resolve) => { resolveSecond = resolve; });
-  };
-
-  const first = getSession();
-  const second = getSession();
-  const firstResult = await first; // first caller's refresh lands in storage
-
-  resolveSecond({ ok: false, json: async () => ({ __type: 'InternalErrorException', message: 'Internal error' }) });
-  const secondResult = await second;
-
-  assert.equal(firstResult.idToken, 'id-2');
-  assert.equal(secondResult.idToken, 'id-2'); // sees the concurrent success instead of throwing
-  logout();
-});
-
 test('logout() clears the local session immediately and revokes the refresh token server-side', async () => {
   mockFetch(authResult({ IdToken: 'id-1', RefreshToken: 'refresh-1', ExpiresIn: 3600 }));
   await login('user', 'pass');
