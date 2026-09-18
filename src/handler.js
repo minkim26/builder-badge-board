@@ -2,6 +2,7 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const {
   DynamoDBDocumentClient,
   QueryCommand,
+  GetCommand,
   PutCommand,
   UpdateCommand,
   DeleteCommand,
@@ -17,6 +18,18 @@ const TABLES = {
   badges: { name: process.env.BADGES_TABLE, idKey: 'badgeId' },
   articles: { name: process.env.ARTICLES_TABLE, idKey: 'articleId' },
 };
+
+// Site-wide settings are a single fixed row, not a collection — doesn't fit
+// the TABLES/idKey list-of-many shape above, so it gets its own small
+// GET/PUT branch instead of forcing it through that machinery.
+const SETTINGS_TABLE = process.env.SETTINGS_TABLE;
+const DEFAULT_SETTINGS = { timezone: 'America/Los_Angeles' };
+// Mirrors web/src/timezone.js's TIMEZONE_OPTIONS values — kept in sync by
+// hand since the frontend and this Lambda are separate packages. A bad value
+// here would break the public page's date display for every visitor, not
+// just the admin who set it, so it's worth validating rather than trusting
+// the request body.
+const VALID_TIMEZONES = ['America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'UTC'];
 
 exports.handler = async (event) => {
   // EventBridge Scheduler invokes the function directly (no API Gateway
@@ -35,6 +48,10 @@ exports.handler = async (event) => {
   const [, resource, rawId] = event.rawPath.split('/');
   const id = rawId && decodeURIComponent(rawId);
   const table = TABLES[resource];
+
+  if (resource === 'settings') {
+    return handleSettings(method, event);
+  }
 
   if (!table) {
     return respond(404, { message: 'Not found' });
@@ -279,6 +296,30 @@ async function progressSync(event) {
   }
 
   return respond(200, { synced });
+}
+
+async function handleSettings(method, event) {
+  try {
+    if (method === 'GET') {
+      const result = await client.send(new GetCommand({ TableName: SETTINGS_TABLE, Key: { userId: USER_ID } }));
+      return respond(200, { ...DEFAULT_SETTINGS, ...result.Item });
+    }
+
+    if (method === 'PUT') {
+      const body = JSON.parse(event.body || '{}');
+      if (!VALID_TIMEZONES.includes(body.timezone)) {
+        return respond(400, { message: `timezone must be one of: ${VALID_TIMEZONES.join(', ')}` });
+      }
+      const item = { userId: USER_ID, timezone: body.timezone, updatedAt: new Date().toISOString() };
+      await client.send(new PutCommand({ TableName: SETTINGS_TABLE, Item: item }));
+      return respond(200, item);
+    }
+
+    return respond(405, { message: 'Method not allowed' });
+  } catch (err) {
+    console.error(err);
+    return respond(500, { message: 'Internal error' });
+  }
 }
 
 async function queryUserItems(tableName) {
