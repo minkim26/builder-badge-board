@@ -73,3 +73,16 @@ test('toArticleItem builds the full URL and carries the thumbnail through', () =
   assert.equal(item.thumbnailUrl, 'https://prod-assets.cosmic.aws.dev/a/abc/hero.webp');
   assert.equal(item.articleId, '/content/abc');
 });
+
+test('toArticleItem carries the description through', () => {
+  const item = toArticleItem({
+    articleId: '/content/abc',
+    title: 'Some Article',
+    uri: '/content/abc/some-article',
+    lastPublishedAt: 1789357828961,
+    tags: [],
+    description: 'What this article is about.',
+    heroImageUrl: 'https://prod-assets.cosmic.aws.dev/a/abc/hero.webp',
+  });
+  assert.equal(item.description, 'What this article is about.');
+});

@@ -152,6 +152,7 @@ const ARTICLE_FIELDS = [
   { key: 'title', label: 'Title', type: 'text' },
   { key: 'url', label: 'URL', type: 'url' },
   { key: 'publishDate', label: 'Publish Date', type: 'date' },
+  { key: 'description', label: 'Description', type: 'text' },
   { key: 'tags', label: 'Tags (comma-separated)', type: 'text' },
   { key: 'thumbnailUrl', label: 'Thumbnail URL', type: 'url' },
 ];
