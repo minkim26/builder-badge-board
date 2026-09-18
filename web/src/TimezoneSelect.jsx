@@ -3,9 +3,15 @@ import { TIMEZONE_OPTIONS } from './timezone';
 // Admin-only: the timezone is a single site-wide setting (persisted via
 // GET/PUT /settings), not a per-visitor preference, so the public page just
 // displays it rather than offering this picker.
-export default function TimezoneSelect({ value, onChange }) {
+export default function TimezoneSelect({ value, onChange, disabled }) {
   return (
-    <select className="timezone-select" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Timezone">
+    <select
+      className="timezone-select"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Timezone"
+      disabled={disabled}
+    >
       {TIMEZONE_OPTIONS.map((tz) => (
         <option key={tz.value} value={tz.value}>{tz.label}</option>
       ))}

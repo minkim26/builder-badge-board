@@ -226,6 +226,7 @@ export default function AdminPage() {
   const [articles, setArticles] = useState([]);
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [timezoneError, setTimezoneError] = useState(null);
+  const [timezoneSaving, setTimezoneSaving] = useState(false);
   const synced = latestSync(badges);
   const articleSynced = latestSync(articles);
 
@@ -253,14 +254,20 @@ export default function AdminPage() {
     setSession(null);
   }
 
+  // Disabled on the select while this runs (see render below) so a second
+  // change can't fire before the first PUT resolves — otherwise an
+  // out-of-order response could leave the saved value behind what's shown.
   async function handleTimezoneChange(tz) {
     setTimezone(tz);
     setTimezoneError(null);
+    setTimezoneSaving(true);
     try {
       await api.updateSettings({ timezone: tz }, await currentToken());
     } catch (err) {
       if (err.message.startsWith('401')) return handleAuthError();
       setTimezoneError('Failed to save — try again.');
+    } finally {
+      setTimezoneSaving(false);
     }
   }
 
@@ -299,7 +306,7 @@ export default function AdminPage() {
       <div className="admin-header">
         <h2>Admin</h2>
         <label className="timezone-picker">
-          Timezone <TimezoneSelect value={timezone} onChange={handleTimezoneChange} />
+          Timezone <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={timezoneSaving} />
         </label>
         {timezoneError && <span className="error">{timezoneError}</span>}
         <button type="button" onClick={handleAuthError}>Log out</button>
