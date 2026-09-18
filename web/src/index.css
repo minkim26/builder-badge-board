@@ -208,14 +208,16 @@ section {
   }
 }
 
-.badge-card {
+.badge-card,
+.article-card {
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
   transition: border-color 120ms ease, transform 120ms ease;
 }
 
-.badge-card:hover {
+.badge-card:hover,
+.article-card:hover {
   border-color: var(--accent-border);
   transform: translateY(-2px);
 }
@@ -480,18 +482,6 @@ section {
 
 .setup-panel li {
   margin-bottom: 6px;
-}
-
-.article-card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  transition: border-color 120ms ease, transform 120ms ease;
-}
-
-.article-card:hover {
-  border-color: var(--accent-border);
-  transform: translateY(-2px);
 }
 
 .article-card-link {
