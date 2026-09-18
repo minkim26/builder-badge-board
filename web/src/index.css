@@ -208,6 +208,12 @@ section {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-card {
+    animation: none;
+  }
+}
+
 .badge-card,
 .article-card {
   border: 1px solid var(--border);
