@@ -196,6 +196,7 @@ function toArticleItem(article) {
     userId: USER_ID,
     articleId: article.articleId,
     title: article.title,
+    description: article.description,
     url: `https://builder.aws.com${article.uri}`,
     // lastPublishedAt is epoch milliseconds already, unlike badges'
     // awardedDate (epoch seconds) — no *1000 here.

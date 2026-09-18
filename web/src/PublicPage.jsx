@@ -85,7 +85,7 @@ export default function PublicPage() {
                 <span>{a.title}</span>
               )}
               {a.publishDate && <span className="article-date">{a.publishDate}</span>}
-              {a.tags && <span className="article-tags">{a.tags}</span>}
+              {a.description && <span className="article-description">{a.description}</span>}
             </li>
           ))}
         </ul>
