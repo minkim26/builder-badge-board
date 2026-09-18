@@ -239,7 +239,15 @@ export default function PublicPage() {
         aria-labelledby="badge-dialog-title"
         onClose={() => setSelectedBadge(null)}
         onClick={(e) => {
-          if (e.target === dialogRef.current) setSelectedBadge(null);
+          // e.target === the dialog on any click outside its rendered box
+          // (the ::backdrop) — but also on a click inside the dialog's own
+          // padding/flex-gap, which has nothing more specific to hit. Compare
+          // coordinates against the actual box instead of relying on target.
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickedOutside =
+            e.clientX < rect.left || e.clientX > rect.right ||
+            e.clientY < rect.top || e.clientY > rect.bottom;
+          if (clickedOutside) setSelectedBadge(null);
         }}
       >
         {selectedBadge && (
