@@ -31,6 +31,10 @@ const DEFAULT_SETTINGS = { timezone: 'America/Los_Angeles' };
 // the request body.
 const VALID_TIMEZONES = ['America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'UTC'];
 
+function isValidTimezone(tz) {
+  return VALID_TIMEZONES.includes(tz);
+}
+
 exports.handler = async (event) => {
   // EventBridge Scheduler invokes the function directly (no API Gateway
   // envelope) for the nightly sync — everything below this expects a real
@@ -307,7 +311,7 @@ async function handleSettings(method, event) {
 
     if (method === 'PUT') {
       const body = JSON.parse(event.body || '{}');
-      if (!VALID_TIMEZONES.includes(body.timezone)) {
+      if (!isValidTimezone(body.timezone)) {
         return respond(400, { message: `timezone must be one of: ${VALID_TIMEZONES.join(', ')}` });
       }
       const item = { userId: USER_ID, timezone: body.timezone, updatedAt: new Date().toISOString() };
@@ -401,3 +405,4 @@ function buildUpdateExpression(body, excludeKeys) {
 module.exports.buildUpdateExpression = buildUpdateExpression;
 module.exports.isValidProgressItems = isValidProgressItems;
 module.exports.toArticleItem = toArticleItem;
+module.exports.isValidTimezone = isValidTimezone;
