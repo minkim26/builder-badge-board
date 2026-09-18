@@ -30,3 +30,5 @@ export const update = (resource, id, data, token) =>
   request('PUT', `/${resource}/${encodeURIComponent(id)}`, { token, body: data });
 export const remove = (resource, id, token) => request('DELETE', `/${resource}/${encodeURIComponent(id)}`, { token });
 export const sync = (resource, token) => request('POST', `/${resource}/sync`, { token });
+export const getSettings = () => request('GET', '/settings');
+export const updateSettings = (data, token) => request('PUT', '/settings', { token, body: data });

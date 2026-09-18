@@ -3,7 +3,10 @@
 // writes). Timezone only matters when turning that instant into something a
 // human reads, so the conversion happens here, once, at display time — not
 // in the backend, and not baked into stored data.
-export const TIMEZONE_STORAGE_KEY = 'badge-board-timezone';
+//
+// The timezone *value* itself is a single site-wide setting persisted via
+// GET/PUT /settings (see api.js) rather than per-browser localStorage — it
+// represents the site owner's real timezone, not a per-visitor preference.
 export const DEFAULT_TIMEZONE = 'America/Los_Angeles';
 export const TIMEZONE_OPTIONS = [
   { value: 'America/Los_Angeles', label: 'Pacific' },
@@ -12,22 +15,6 @@ export const TIMEZONE_OPTIONS = [
   { value: 'America/New_York', label: 'Eastern' },
   { value: 'UTC', label: 'UTC' },
 ];
-
-export function getStoredTimezone() {
-  try {
-    return localStorage.getItem(TIMEZONE_STORAGE_KEY) || DEFAULT_TIMEZONE;
-  } catch {
-    return DEFAULT_TIMEZONE;
-  }
-}
-
-export function setStoredTimezone(tz) {
-  try {
-    localStorage.setItem(TIMEZONE_STORAGE_KEY, tz);
-  } catch {
-    // private browsing / storage disabled — just won't persist
-  }
-}
 
 // Wall-clock date/time fields for `date` as seen in `timeZone`.
 function zonedParts(date, timeZone) {

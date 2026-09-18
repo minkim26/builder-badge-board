@@ -1,7 +1,8 @@
 import { TIMEZONE_OPTIONS } from './timezone';
 
-// Shared by the public and admin pages so there's exactly one control for
-// the one timezone preference that governs every timestamp on the page.
+// Admin-only: the timezone is a single site-wide setting (persisted via
+// GET/PUT /settings), not a per-visitor preference, so the public page just
+// displays it rather than offering this picker.
 export default function TimezoneSelect({ value, onChange }) {
   return (
     <select className="timezone-select" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Timezone">

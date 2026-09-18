@@ -12,8 +12,7 @@ import {
   formatDateLabel,
   timezoneAbbrev,
   formatTimestamp,
-  getStoredTimezone,
-  setStoredTimezone,
+  DEFAULT_TIMEZONE,
 } from './timezone';
 import * as api from './api';
 
@@ -225,7 +224,8 @@ export default function AdminPage() {
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
   const [badges, setBadges] = useState([]);
   const [articles, setArticles] = useState([]);
-  const [timezone, setTimezone] = useState(getStoredTimezone);
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
+  const [timezoneError, setTimezoneError] = useState(null);
   const synced = latestSync(badges);
   const articleSynced = latestSync(articles);
 
@@ -242,14 +242,26 @@ export default function AdminPage() {
 
   useEffect(checkSession, []);
 
+  // Public read, independent of login — the public page reads this same
+  // setting, so it's the site-wide source of truth, not a per-browser one.
+  useEffect(() => {
+    api.getSettings().then((s) => setTimezone(s.timezone)).catch(() => {});
+  }, []);
+
   function handleAuthError() {
     logout();
     setSession(null);
   }
 
-  function handleTimezoneChange(tz) {
+  async function handleTimezoneChange(tz) {
     setTimezone(tz);
-    setStoredTimezone(tz);
+    setTimezoneError(null);
+    try {
+      await api.updateSettings({ timezone: tz }, await currentToken());
+    } catch (err) {
+      if (err.message.startsWith('401')) return handleAuthError();
+      setTimezoneError('Failed to save — try again.');
+    }
   }
 
   // Re-checked (and silently refreshed if expired) right before each
@@ -289,6 +301,7 @@ export default function AdminPage() {
         <label className="timezone-picker">
           Timezone <TimezoneSelect value={timezone} onChange={handleTimezoneChange} />
         </label>
+        {timezoneError && <span className="error">{timezoneError}</span>}
         <button type="button" onClick={handleAuthError}>Log out</button>
       </div>
 
