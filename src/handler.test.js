@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildUpdateExpression, isValidProgressItems, toArticleItem } = require('./handler');
+const { buildUpdateExpression, isValidProgressItems, toArticleItem, isValidTimezone } = require('./handler');
 
 test('builds SET expression for updatable fields', () => {
   const result = buildUpdateExpression({ status: 'earned', dateEarned: '2026-09-12' }, ['userId', 'badgeId']);
@@ -72,6 +72,18 @@ test('toArticleItem builds the full URL and carries the thumbnail through', () =
   assert.equal(item.url, 'https://builder.aws.com/content/abc/some-article');
   assert.equal(item.thumbnailUrl, 'https://prod-assets.cosmic.aws.dev/a/abc/hero.webp');
   assert.equal(item.articleId, '/content/abc');
+});
+
+test('isValidTimezone accepts each of the frontend TIMEZONE_OPTIONS values', () => {
+  for (const tz of ['America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'UTC']) {
+    assert.equal(isValidTimezone(tz), true);
+  }
+});
+
+test('isValidTimezone rejects anything outside that whitelist', () => {
+  assert.equal(isValidTimezone('Mars/Olympus_Mons'), false);
+  assert.equal(isValidTimezone(''), false);
+  assert.equal(isValidTimezone(undefined), false);
 });
 
 test('toArticleItem carries the description through', () => {

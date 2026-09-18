@@ -29,6 +29,7 @@ Globals:
       Variables:
         BADGES_TABLE: !Ref BadgesTable
         ARTICLES_TABLE: !Ref ArticlesTable
+        SETTINGS_TABLE: !Ref SettingsTable
         BUILDER_PROFILE_ID: !Ref BuilderProfileId
         SYNC_KEY: !Ref SyncKey
 
@@ -64,6 +65,18 @@ Resources:
           KeyType: HASH
         - AttributeName: articleId
           KeyType: RANGE
+
+  SettingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Settings
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
 
   UserPool:
     Type: AWS::Cognito::UserPool
@@ -140,6 +153,8 @@ Resources:
             TableName: !Ref BadgesTable
         - DynamoDBCrudPolicy:
             TableName: !Ref ArticlesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SettingsTable
       Events:
         ListBadges:
           Type: HttpApi
@@ -233,6 +248,20 @@ Resources:
             Method: DELETE
             Auth:
               Authorizer: CognitoAuthorizer
+        GetSettings:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /settings
+            Method: GET
+        UpdateSettings:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /settings
+            Method: PUT
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   MonthlyCostBudget:
     Type: AWS::Budgets::Budget
@@ -275,6 +304,8 @@ Outputs:
     Value: !Ref BadgesTable
   ArticlesTableName:
     Value: !Ref ArticlesTable
+  SettingsTableName:
+    Value: !Ref SettingsTable
   ApiUrl:
     Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
   UserPoolId:
