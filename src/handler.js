@@ -248,7 +248,10 @@ function toArticleItem(article) {
   if (url.origin !== ARTICLE_ORIGIN) return null;
 
   // lastPublishedAt is epoch milliseconds already, unlike badges'
-  // awardedDate (epoch seconds) — no *1000 here.
+  // awardedDate (epoch seconds) — no *1000 here. Checked explicitly because
+  // new Date(null) is valid and silently becomes 1970-01-01 instead of
+  // failing the NaN check below.
+  if (!Number.isFinite(article.lastPublishedAt)) return null;
   const published = new Date(article.lastPublishedAt);
   if (Number.isNaN(published.getTime())) return null;
 

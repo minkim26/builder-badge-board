@@ -149,6 +149,8 @@ test('toArticleItem keeps an "@evil" style uri on builder.aws.com instead of tre
 test('toArticleItem rejects an article whose publish date is not a real timestamp', () => {
   assert.equal(toArticleItem({ ...validArticle, lastPublishedAt: 'yesterday' }), null);
   assert.equal(toArticleItem({ ...validArticle, lastPublishedAt: undefined }), null);
+  // new Date(null) is valid and silently becomes epoch 0 instead of NaN.
+  assert.equal(toArticleItem({ ...validArticle, lastPublishedAt: null }), null);
 });
 
 test('toArticleItem skips an article missing its id or title, and nulls (not undefines) a missing description', () => {

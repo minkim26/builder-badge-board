@@ -208,25 +208,15 @@ Resources:
             TableName: !Ref ArticlesTable
         - DynamoDBCrudPolicy:
             TableName: !Ref SettingsTable
-        # Read access to the one sync-key parameter, nothing else in SSM. The
-        # kms:Decrypt statement is belt and braces: the default aws/ssm key's
-        # own policy is believed to already let account principals decrypt
-        # through SSM, so this most likely changes nothing. It can only add
-        # access, and only for SSM acting on this one parameter. It was never
-        # tested against real AWS; remove it to keep the role minimal, or keep
-        # it if the parameter ever moves to a customer managed key.
+        # Read access to the one sync-key parameter, nothing else in SSM. No
+        # explicit kms:Decrypt: the default aws/ssm key's own policy already
+        # lets account principals decrypt through SSM. Add one, scoped to this
+        # parameter, only if it ever moves to a customer managed key.
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
               Action: ssm:GetParameter
               Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SyncKeyParameter}
-            - Effect: Allow
-              Action: kms:Decrypt
-              Resource: '*'
-              Condition:
-                StringEquals:
-                  kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
-                  kms:EncryptionContext:PARAMETER_ARN: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SyncKeyParameter}
       Events:
         ListBadges:
           Type: HttpApi
