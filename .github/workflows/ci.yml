@@ -42,3 +42,29 @@ jobs:
 
       - name: Validate SAM template
         run: sam validate --lint
+
+  # Amplify auto-build on main is off; this job is the only frontend deploy.
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Trigger Amplify build if the frontend changed
+        env:
+          BEFORE: ${{ github.event.before }}
+          AMPLIFY_WEBHOOK_URL: ${{ secrets.AMPLIFY_WEBHOOK_URL }}
+        run: |
+          # web/src/tampermonkeyScript.js bundles tampermonkey/progress-sync.user.js
+          # into the admin page. git diff also errors on an unknown "before" (first
+          # push, force push), which counts as changed, so a deploy is never skipped.
+          if ! git diff --quiet "$BEFORE" "$GITHUB_SHA" -- web tampermonkey/progress-sync.user.js amplify.yml customHttp.yml; then
+            : "${AMPLIFY_WEBHOOK_URL:?Set the AMPLIFY_WEBHOOK_URL repository secret}"
+            curl --fail --silent --show-error --max-time 30 -X POST -d '{}' \
+              -H 'Content-Type: application/json' "${AMPLIFY_WEBHOOK_URL}&operation=startbuild"
+          else
+            echo "No frontend changes in ${BEFORE}..${GITHUB_SHA}, skipping the Amplify build."
+          fi

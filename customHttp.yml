@@ -1,0 +1,13 @@
+# Amplify requires customHttp.yml in the repo root for a monorepo; appRoot
+# names the app the headers apply to.
+#
+# Only Vite's content-hashed output under /assets is made immutable, so browsers
+# stop revalidating it on every visit. index.html and unhashed files keep
+# Amplify's defaults so a new deploy shows up right away.
+applications:
+  - appRoot: web
+    customHeaders:
+      - pattern: '/assets/*'
+        headers:
+          - key: 'Cache-Control'
+            value: 'public, max-age=31536000, immutable'

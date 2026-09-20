@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import PublicPage from './PublicPage';
-import AdminPage from './AdminPage';
+
+// Loaded on demand so public visitors don't download the admin, auth and
+// resource-manager code.
+const AdminPage = lazy(() => import('./AdminPage'));
 
 // Hash routing instead of react-router: avoids needing an Amplify Hosting
 // rewrite rule for client-side paths.
@@ -21,7 +24,9 @@ export default function App() {
         <a href="#">Home</a>
         <a href="#admin">Admin</a>
       </nav>
-      {isAdmin ? <AdminPage /> : <PublicPage />}
+      <Suspense fallback={<p role="status">Loading...</p>}>
+        {isAdmin ? <AdminPage /> : <PublicPage />}
+      </Suspense>
     </div>
   );
 }

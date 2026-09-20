@@ -14,14 +14,16 @@ via `sam build` / `sam deploy`. Reasons:
 - Smaller learning curve than raw CDK for someone new to AWS, while still
   weekend-sized.
 
-Amplify Hosting (frontend) and the Cognito user pool are the two pieces not
-covered by the SAM template — see their sections below for why.
+Amplify Hosting (frontend, including the webhook and GitHub secret that
+trigger its builds — see the README's Deploy section) and the Cognito user
+pool are the two pieces not covered by the SAM template — see their sections
+below for why.
 
 ## AWS Services
 
 | Service | Role in this system |
 |---|---|
-| **Amplify Hosting** | Builds and hosts the React frontend, connected to a GitHub repo for CI/CD on push. |
+| **Amplify Hosting** | Builds and hosts the React frontend. Amplify's own auto-build is off; the GitHub Actions `deploy` job triggers a build through an incoming webhook after tests pass on `main`, and only when frontend files changed. |
 | **ACM (via Amplify)** | Custom domain (`builder.minkim26.tech`) for the Amplify app. The domain is registered at a third-party registrar, not Route 53, so it's managed externally — DNS records (cert validation + subdomain CNAME) are added manually at the registrar. Amplify's domain management provisions the ACM cert automatically once those records are in place. |
 | **Amazon Cognito** | Single-user admin auth. One user pool, one user created manually in the console — no signup flow. |
 | **API Gateway** | HTTP API in front of the Lambda functions; public routes are open, admin (write) routes require a valid Cognito JWT. |
