@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { login, getSession, logout } from './auth';
+import { login, getSession, logout, respondToMfa, startTotpSetup, completeTotpSetup, totpUri } from './auth';
 import ResourceManager from './ResourceManager';
 import { BADGE_CATALOG, catalogEntry, latestSync } from './badgeCatalog';
 import { TAMPERMONKEY_SCRIPT } from './tampermonkeyScript';
@@ -182,28 +182,109 @@ function useResourceSync(resource, noun, currentToken, onAuthError) {
   return { syncing, status, key, handleSync };
 }
 
+// Sign-in is up to two steps: email + password, then — the user pool requires
+// TOTP MFA — a 6-digit code. On the very first sign-in no authenticator is
+// enrolled yet, so the second step also shows the secret to add to one.
 function LoginForm({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [challenge, setChallenge] = useState(null); // set once the password is accepted and Cognito wants a code
+  const [secret, setSecret] = useState(null); // TOTP secret, only during first-time enrollment
   const [error, setError] = useState(null);
   const [pending, setPending] = useState(false);
 
-  async function handleSubmit(e) {
-    e.preventDefault();
+  function startOver(message) {
+    setChallenge(null);
+    setSecret(null);
+    setCode('');
+    setPassword('');
+    setError(message);
+  }
+
+  async function run(step) {
     setError(null);
     setPending(true);
     try {
-      const session = await login(username, password);
-      onLogin(session);
+      await step();
     } catch (err) {
-      setError(err.message);
+      // A challenge session expires (see AuthSessionValidity in
+      // template.yaml) and can't be reused — only a fresh sign-in gets a new
+      // one. A wrong code is a different error type and stays on this step
+      // for another try. Before a challenge exists, NotAuthorizedException is
+      // just a wrong password and is shown as-is.
+      if (challenge && err.cognitoType === 'NotAuthorizedException') {
+        startOver('That sign-in expired. Enter your password again.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setPending(false);
     }
   }
 
+  function handlePassword(e) {
+    e.preventDefault();
+    run(async () => {
+      const result = await login(username, password);
+      if (result.session) return onLogin(result.session);
+      let next = result.challenge;
+      if (next.name === 'MFA_SETUP') {
+        const setup = await startTotpSetup(next);
+        setSecret(setup.secret);
+        next = { ...next, session: setup.session };
+      }
+      setChallenge(next);
+    });
+  }
+
+  function handleCode(e) {
+    e.preventDefault();
+    run(async () => {
+      const finish = challenge.name === 'MFA_SETUP' ? completeTotpSetup : respondToMfa;
+      onLogin(await finish(challenge, code));
+    });
+  }
+
+  if (challenge) {
+    const enrolling = challenge.name === 'MFA_SETUP';
+    let submitLabel = enrolling ? 'Finish setup' : 'Verify';
+    if (pending) submitLabel = 'Checking...';
+    return (
+      <form onSubmit={handleCode} className="login-form">
+        <h2>{enrolling ? 'Set up two-factor sign-in' : 'Two-factor code'}</h2>
+        {error && <p className="error">{error}</p>}
+        {enrolling && (
+          <>
+            <p>
+              Add this key to an authenticator app (1Password, Google Authenticator, Authy) as a
+              time-based code, then enter the 6-digit code it shows.
+            </p>
+            <code className="totp-secret">{secret}</code>
+            <a href={totpUri(challenge.label, secret)}>Open in authenticator app</a>
+          </>
+        )}
+        <label>
+          {enrolling ? 'Code from your app' : 'Authentication code'}
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.trim())}
+            required
+          />
+        </label>
+        <button type="submit" disabled={pending}>{submitLabel}</button>
+        <button type="button" onClick={() => startOver(null)} disabled={pending}>Cancel</button>
+      </form>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="login-form">
+    <form onSubmit={handlePassword} className="login-form">
       <h2>Admin Login</h2>
       {error && <p className="error">{error}</p>}
       <label>

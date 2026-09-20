@@ -103,6 +103,13 @@ code {
   background: var(--code-bg);
 }
 
+/* The TOTP secret is a long unbroken string — let it wrap on a phone. */
+.totp-secret {
+  display: block;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
 .app {
   padding: 0 24px 48px;
   text-align: left;
