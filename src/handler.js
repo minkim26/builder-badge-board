@@ -7,9 +7,11 @@ const {
   UpdateCommand,
   DeleteCommand,
 } = require('@aws-sdk/lib-dynamodb');
-const { randomUUID } = require('crypto');
+const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
+const { randomUUID, createHash, timingSafeEqual } = require('crypto');
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const ssm = new SSMClient({});
 
 // single-user app: every item lives under the same fixed partition key
 const USER_ID = 'me';
@@ -50,7 +52,14 @@ exports.handler = async (event) => {
   // of one segment instead of breaking the route — decode it back to the
   // real ID before using it as a DynamoDB key. No-op for badgeId/UUIDs.
   const [, resource, rawId] = event.rawPath.split('/');
-  const id = rawId && decodeURIComponent(rawId);
+  // A stray "%" isn't valid percent-encoding and makes decodeURIComponent
+  // throw — this runs before the try below, so it would surface as a 502.
+  let id;
+  try {
+    id = rawId && decodeURIComponent(rawId);
+  } catch {
+    return respond(400, { message: 'Invalid id' });
+  }
   const table = TABLES[resource];
 
   if (resource === 'settings') {
@@ -81,7 +90,8 @@ exports.handler = async (event) => {
     }
 
     if (method === 'POST') {
-      const body = JSON.parse(event.body || '{}');
+      const body = parseBody(event);
+      if (!body) return respond(400, { message: 'Body must be a JSON object' });
       if (resource === 'badges') {
         const existing = await findBadgeByName(body.name);
         if (existing) {
@@ -104,7 +114,8 @@ exports.handler = async (event) => {
     }
 
     if (method === 'PUT') {
-      const body = JSON.parse(event.body || '{}');
+      const body = parseBody(event);
+      if (!body) return respond(400, { message: 'Body must be a JSON object' });
       const update = buildUpdateExpression(body, ['userId', table.idKey]);
       if (!update) {
         return respond(400, { message: 'No fields to update' });
@@ -200,7 +211,12 @@ async function syncArticles() {
 
     for (const article of data.articles || []) {
       if (article.status !== 'LIVE') continue; // skip drafts, if this endpoint ever returns them
-      await client.send(new PutCommand({ TableName: TABLES.articles.name, Item: toArticleItem(article) }));
+      const item = toArticleItem(article);
+      if (!item) {
+        console.warn('skipping an unusable article', article.articleId);
+        continue;
+      }
+      await client.send(new PutCommand({ TableName: TABLES.articles.name, Item: item }));
       count += 1;
     }
     cursor = data.cursor;
@@ -212,18 +228,44 @@ async function syncArticles() {
 // Maps one Builder Center article into this app's Articles item shape. Pure
 // (no I/O) so it's unit-testable without mocking fetch/DynamoDB, same as
 // buildUpdateExpression/isValidProgressItems below.
+//
+// This is third-party data, so it's checked rather than trusted. Returns null
+// for an article that can't be stored or shown safely, and the caller skips it.
+// DynamoDB's document client throws on an undefined attribute, so one article
+// missing a field would otherwise abort the whole nightly sync.
+const ARTICLE_ORIGIN = 'https://builder.aws.com';
+
 function toArticleItem(article) {
+  // Resolving against the origin (instead of string-concatenating) means a
+  // uri like "//evil.example/x" or "https://evil.example/x" lands on another
+  // origin and gets rejected here, rather than becoming a link on the public page.
+  let url;
+  try {
+    url = new URL(article.uri, ARTICLE_ORIGIN);
+  } catch {
+    return null;
+  }
+  if (url.origin !== ARTICLE_ORIGIN) return null;
+
+  // lastPublishedAt is epoch milliseconds already, unlike badges'
+  // awardedDate (epoch seconds) — no *1000 here.
+  const published = new Date(article.lastPublishedAt);
+  if (Number.isNaN(published.getTime())) return null;
+
+  // articleId is the table's sort key and title is the card's headline —
+  // without either there is nothing to store or show. description is optional.
+  if (!article.articleId || !article.title) return null;
+
   return {
     userId: USER_ID,
     articleId: article.articleId,
     title: article.title,
-    description: article.description,
-    url: `https://builder.aws.com${article.uri}`,
-    // lastPublishedAt is epoch milliseconds already, unlike badges'
-    // awardedDate (epoch seconds) — no *1000 here.
-    publishDate: new Date(article.lastPublishedAt).toISOString().slice(0, 10),
+    description: article.description ?? null,
+    url: url.href,
+    publishDate: published.toISOString().slice(0, 10),
     tags: (article.tags || []).join(', '), // PublicPage.jsx renders this as a plain string, same as manual entries
-    thumbnailUrl: article.heroImageUrl,
+    // Every visitor's browser fetches this, so only https from upstream.
+    thumbnailUrl: /^https:\/\//i.test(article.heroImageUrl) ? article.heroImageUrl : null,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -233,8 +275,9 @@ function toArticleItem(article) {
 // Cognito login, so this route is protected by a shared secret header
 // instead of the Cognito authorizer. No real AWS or Builder Center
 // credential ever reaches this app; the secret only grants write access
-// to this one table and is trivially revocable by redeploying with a new
-// value. Deliberately ignores anything but IN_PROGRESS items — earned
+// to this one table and is revocable by overwriting its SSM parameter (a
+// warm container honors the old key for up to KEY_CACHE_MS). Deliberately
+// ignores anything but IN_PROGRESS items — earned
 // badges stay owned by syncBadges()/the sync button, so the two paths
 // never write conflicting data for the same badgeId.
 // Real catalog is 21 badges — this is slack, not a target, so a leaked
@@ -242,20 +285,29 @@ function toArticleItem(article) {
 const MAX_TOTAL_BADGES = 30;
 
 async function progressSync(event) {
-  const syncKey = process.env.SYNC_KEY;
-  if (!syncKey || event.headers?.['x-sync-key'] !== syncKey) {
+  // A failed SSM read throws out of here to the handler's catch: a 500 that
+  // the API 5xx alarm picks up. It is not a 401, so an outage or a missing
+  // parameter looks like the misconfiguration it is, not like a wrong guess.
+  if (!hasValidSyncKey(event.headers?.['x-sync-key'], await getSyncKey())) {
+    // The wording matters: ProgressSyncRejectedFilter in template.yaml
+    // matches "progress-sync rejected" to drive the brute-force alarm. Never
+    // log the submitted key itself.
+    console.warn('progress-sync rejected', event.requestContext.http.sourceIp);
     return respond(401, { message: 'Unauthorized' });
   }
 
-  const body = JSON.parse(event.body || '{}');
+  const body = parseBody(event);
+  if (!body) return respond(400, { message: 'Body must be a JSON object' });
   if (!isValidProgressItems(body.items)) {
     return respond(400, { message: 'items must be a non-empty array of {badgeId, name, progress}, max 25' });
   }
 
   const existing = await queryUserItems(TABLES.badges.name);
   const existingIds = new Set(existing.map((b) => b.badgeId));
-  const newIds = body.items.map((i) => i.badgeId).filter((id) => !existingIds.has(id));
-  if (existing.length + newIds.length > MAX_TOTAL_BADGES) {
+  // A Set so one request repeating a fresh badgeId can't be counted twice —
+  // or, the other way, slip extra new IDs past the cap.
+  const newIds = new Set(body.items.map((i) => i.badgeId).filter((id) => !existingIds.has(id)));
+  if (existing.length + newIds.size > MAX_TOTAL_BADGES) {
     return respond(400, { message: 'Too many distinct badges for this account' });
   }
 
@@ -310,7 +362,8 @@ async function handleSettings(method, event) {
     }
 
     if (method === 'PUT') {
-      const body = JSON.parse(event.body || '{}');
+      const body = parseBody(event);
+      if (!body) return respond(400, { message: 'Body must be a JSON object' });
       if (!isValidTimezone(body.timezone)) {
         return respond(400, { message: `timezone must be one of: ${VALID_TIMEZONES.join(', ')}` });
       }
@@ -363,7 +416,13 @@ async function removeStaleDuplicate(knownBadges, name, badgeId) {
 
 // Caps a single request at 25 items (more than the whole badge catalog).
 // The real backstop against a leaked key growing the table without bound
-// is MAX_TOTAL_BADGES in progressSync(), not this per-request limit.
+// is MAX_TOTAL_BADGES in progressSync(), not this per-request limit. The
+// field-length and progress caps stop a leaked key from stuffing oversized
+// strings into rows that every visitor's browser then downloads. Real
+// badgeIds and names are far shorter than 200 characters.
+const MAX_FIELD_LENGTH = 200;
+const MAX_PROGRESS = 1_000_000;
+
 function isValidProgressItems(items) {
   return (
     Array.isArray(items) &&
@@ -374,12 +433,66 @@ function isValidProgressItems(items) {
         i &&
         typeof i.badgeId === 'string' &&
         i.badgeId &&
+        i.badgeId.length <= MAX_FIELD_LENGTH &&
         typeof i.name === 'string' &&
         i.name &&
+        i.name.length <= MAX_FIELD_LENGTH &&
         Number.isFinite(i.progress) &&
-        i.progress >= 0
+        i.progress >= 0 &&
+        i.progress <= MAX_PROGRESS
     )
   );
+}
+
+// The shared secret lives in SSM Parameter Store (a SecureString), not in the
+// function's environment, so it isn't visible in the Lambda console or in
+// stack parameters. Read lazily — only progress-sync needs it — and cached
+// briefly so a burst of requests (or a flood of guesses) costs one SSM call
+// instead of one each. The flip side is rotation lag: after
+// `put-parameter --overwrite`, a warm container can keep accepting the old
+// key for up to KEY_CACHE_MS.
+const KEY_CACHE_MS = 5 * 60 * 1000;
+let cachedSyncKey;
+let cachedSyncKeyAt = 0;
+
+async function getSyncKey() {
+  if (cachedSyncKey !== undefined && Date.now() - cachedSyncKeyAt < KEY_CACHE_MS) return cachedSyncKey;
+  const { Parameter } = await ssm.send(
+    new GetParameterCommand({ Name: process.env.SYNC_KEY_PARAM, WithDecryption: true })
+  );
+  // A failed read throws before reaching here, so failures are never cached
+  // and the next request retries. An empty value is cached like any other and
+  // fails the comparison below; a missing one (undefined) isn't cached, so it
+  // is re-read each request — still failing closed, just not memoized.
+  cachedSyncKey = Parameter?.Value;
+  cachedSyncKeyAt = Date.now();
+  return cachedSyncKey;
+}
+
+function clearSyncKeyCache() {
+  cachedSyncKey = undefined;
+  cachedSyncKeyAt = 0;
+}
+
+// Compared as SHA-256 digests so timingSafeEqual always gets equal-length
+// buffers (it throws otherwise) and the comparison time doesn't reveal how
+// much of a guess matched. A missing key on either side is a rejection.
+const digest = (s) => createHash('sha256').update(s).digest();
+
+function hasValidSyncKey(provided, expected) {
+  return Boolean(expected) && typeof provided === 'string' && timingSafeEqual(digest(provided), digest(expected));
+}
+
+// Returns the parsed body only when it's a plain JSON object, so callers can
+// answer 400 for malformed JSON, `null`, or an array instead of throwing (a
+// 500) or writing nonsense keys like "0" into DynamoDB.
+function parseBody(event) {
+  try {
+    const body = JSON.parse(event.body || '{}');
+    return body && typeof body === 'object' && !Array.isArray(body) ? body : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function respond(statusCode, body) {
@@ -406,3 +519,7 @@ module.exports.buildUpdateExpression = buildUpdateExpression;
 module.exports.isValidProgressItems = isValidProgressItems;
 module.exports.toArticleItem = toArticleItem;
 module.exports.isValidTimezone = isValidTimezone;
+module.exports.hasValidSyncKey = hasValidSyncKey;
+module.exports.getSyncKey = getSyncKey;
+module.exports.clearSyncKeyCache = clearSyncKeyCache;
+module.exports.parseBody = parseBody;
