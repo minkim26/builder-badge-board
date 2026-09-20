@@ -161,8 +161,8 @@ triggers a Lambda that fetches/parses the profile and upserts into DynamoDB.
       normally, forwarding only `IN_PROGRESS` items to a new
       `POST /badges/progress-sync` route. That route has no Cognito
       authorizer (the userscript can't do an interactive login either)
-      and is instead protected by a `SYNC_KEY` shared secret checked in
-      the handler — an app-specific, instantly-revocable secret, not a
+      and is instead protected by a shared secret (kept in SSM, checked in
+      the handler) — an app-specific, easily revocable secret, not a
       real AWS or Builder Center credential. **Revised decision:
       in-progress badges (9/21) are automated via the userscript when a
       matching tab happens to be open; manual entry via the admin panel

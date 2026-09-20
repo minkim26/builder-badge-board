@@ -28,6 +28,7 @@ below for why.
 | **Amazon Cognito** | Single-user admin auth. One user pool, one user created manually in the console — no signup flow. |
 | **API Gateway** | HTTP API in front of the Lambda functions; public routes are open, admin (write) routes require a valid Cognito JWT. |
 | **AWS Lambda** | CRUD handlers (list/add/update/delete badges and articles) behind API Gateway. Defined and deployed via the SAM template. |
+| **SSM Parameter Store** | Holds the `progress-sync` shared secret (a SecureString the Lambda reads at runtime) and the alert email address (resolved at deploy time), keeping both out of the repo and out of the function's configuration. |
 | **DynamoDB** | Two tables, `Badges` and `Articles` — see `PRD.md` Data Model. |
 | **EventBridge Scheduler** | Triggers the same CRUD Lambda directly (no API Gateway) once nightly at midnight PT, running both `syncBadges()` and `syncArticles()` against Builder Center's public content API. See Data Flow below. |
 | **Amazon Bedrock / Nova** *(stretch, optional)* | Generates a short AI summary of the user's builder journey from badge data. Not required to qualify for the challenge. |
@@ -73,9 +74,11 @@ a Cognito JWT, since the userscript can't do an interactive login.
 
 1. One Cognito user pool, one user, created manually in the AWS Console —
    no self-registration is implemented or exposed.
-2. The React app's admin view presents a login form (Cognito Hosted UI or
-   Amplify Auth SDK — either is fine, pick whichever is less setup) that
-   authenticates against the user pool and receives a JWT.
+2. The React app's admin view presents a login form that calls Cognito's
+   `InitiateAuth` API directly (`web/src/auth.js`, no SDK) and receives a JWT.
+   The pool requires TOTP MFA, so sign-in is a password followed by a 6-digit
+   authenticator code, and the very first sign-in also enrolls the
+   authenticator app.
 3. The JWT is attached to write requests (add/update/delete) sent to API
    Gateway.
 4. API Gateway uses a Cognito authorizer on the write routes only; public
@@ -84,6 +87,32 @@ a Cognito JWT, since the userscript can't do an interactive login.
 5. There is no role/permission tiering beyond "authenticated admin" vs.
    "anonymous visitor" — a single user pool member is implicitly the only
    admin.
+
+## Protections and Monitoring
+
+- **Login brute force** never reaches API Gateway (the browser talks to
+  Cognito directly), so it is limited by Cognito's own throttling and lockout,
+  by TOTP MFA, and by `PreventUserExistenceErrors` (an unknown username looks
+  the same as a wrong password). API Gateway throttles can't help here.
+- **API floods**: every route is throttled at 10 requests/second (burst 20),
+  globally rather than per IP; `POST /badges/progress-sync` has its own
+  tighter limit.
+- **Sync key**: the shared secret for `progress-sync` is an SSM SecureString
+  that the Lambda reads at runtime and caches for five minutes, so it is not in
+  the template, the stack parameters, or the function's configuration. It is
+  compared in constant time, and each wrong guess is logged and counted by an
+  alarm.
+- **Response headers**: HSTS, a CSP that allows only this site's own API and
+  Cognito hosts, and clickjacking / MIME-sniffing protections are set in
+  `customHttp.yml`.
+- **Logs and alarms**: API access logs and Lambda logs are kept 30 days. An SNS
+  topic emails the address stored in the SSM parameter
+  `/builder-badge-board/alert-email` when Lambda errors (including a failed
+  nightly sync), the API answers a 5xx (the handler catches most failures and
+  returns 500, which the Lambda error metric doesn't count), API 4xx responses
+  spike, or the sync key is guessed wrong repeatedly.
+- **Data safety**: the DynamoDB tables have point-in-time recovery and are
+  retained if the stack is ever deleted.
 
 ## Data Flow
 
