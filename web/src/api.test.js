@@ -23,6 +23,13 @@ test('a non-ok response throws with the server message', async () => {
   await assert.rejects(() => api.list('badges'), /401: Unauthorized/);
 });
 
+test('a non-JSON error body keeps the status code instead of throwing a SyntaxError', async () => {
+  for (const text of ['<html>Bad Gateway</html>', '', 'null', '{}']) {
+    mockFetch({ ok: false, status: 502, statusText: 'Bad Gateway', text: async () => text });
+    await assert.rejects(() => api.list('badges'), /^Error: 502: Bad Gateway$/, JSON.stringify(text));
+  }
+});
+
 test('getSettings() issues an unauthenticated GET to /settings', async () => {
   let captured;
   globalThis.fetch = async (url, opts) => {

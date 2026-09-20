@@ -11,9 +11,16 @@ async function request(method, path, { token, body } = {}) {
   });
 
   if (!res.ok) {
-    // DELETE and some error paths return no body
+    // DELETE and some error paths return no body, and a gateway or proxy
+    // error can be plain text or HTML — none of that should become a
+    // SyntaxError that hides the real status code.
     const text = await res.text();
-    const message = text ? JSON.parse(text).message : res.statusText;
+    let message = res.statusText;
+    try {
+      message = JSON.parse(text).message ?? message;
+    } catch {
+      // not JSON, or JSON without a message — keep the status text
+    }
     throw new Error(`${res.status}: ${message}`);
   }
 
