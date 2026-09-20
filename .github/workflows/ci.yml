@@ -60,13 +60,16 @@ jobs:
           BEFORE: ${{ github.event.before }}
           AMPLIFY_WEBHOOK_URL: ${{ secrets.AMPLIFY_WEBHOOK_URL }}
         run: |
-          # An unknown "before" (first push, force push) counts as changed, so a
+          # web/src/tampermonkeyScript.js bundles tampermonkey/progress-sync.user.js
+          # into the admin page, so that file counts as a frontend file too. An
+          # unknown "before" (first push, force push) counts as changed, so a
           # deploy is never skipped by mistake.
           if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null \
-            || ! git diff --quiet "$BEFORE" "$GITHUB_SHA" -- web amplify.yml customHttp.yml; then
-            curl --fail --silent --show-error -X POST -d '{}' \
-              -H 'Content-Type: application/json' \
-              "${AMPLIFY_WEBHOOK_URL}&operation=startbuild"
+            || ! git diff --quiet "$BEFORE" "$GITHUB_SHA" -- web tampermonkey/progress-sync.user.js amplify.yml customHttp.yml; then
+            : "${AMPLIFY_WEBHOOK_URL:?Set the AMPLIFY_WEBHOOK_URL repository secret}"
+            url="$(printf '%s' "$AMPLIFY_WEBHOOK_URL" | tr -d '\r\n')&operation=startbuild"
+            curl --fail --silent --show-error --max-time 30 -X POST -d '{}' \
+              -H 'Content-Type: application/json' "$url"
           else
             echo "No frontend changes in ${BEFORE}..${GITHUB_SHA}, skipping the Amplify build."
           fi

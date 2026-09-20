@@ -85,9 +85,15 @@ Frontend: **deployed.** The Amplify Hosting app is connected to this repo.
 Amplify's own auto-build on `main` is turned off. Instead, the `deploy` job in
 `.github/workflows/ci.yml` starts an Amplify build through an incoming
 webhook, but only after the tests pass on `main` and only when `web/`,
+`tampermonkey/progress-sync.user.js` (bundled into the admin page),
 `amplify.yml`, or `customHttp.yml` changed. Backend-only and docs-only pushes
-don't spend any Amplify build minutes. To redeploy by hand, use "Redeploy this
-version" in the Amplify console.
+don't spend any Amplify build minutes. To build the current tip of `main` by
+hand, for example after a run that failed, use:
+
+```bash
+aws amplify start-job --app-id d2xsuyav9vi5h7 --branch-name main \
+  --job-type RELEASE --region us-east-1
+```
 
 One-time setup for that, needed for any Amplify app that uses this repo. Run
 these before merging the change that adds the `deploy` job, so there's no gap

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Guards the hosting and deploy settings that keep Amplify build minutes low.
@@ -8,6 +8,10 @@ import { join } from 'node:path';
 // ponytail: switch to a YAML parser if these regexes get brittle.
 const repoRoot = join(import.meta.dirname, '..', '..');
 const read = (file) => readFileSync(join(repoRoot, file), 'utf8');
+
+// The deploy job diffs these paths to decide whether Amplify needs a build.
+const deployJob = () => read('.github/workflows/ci.yml').split('\n  deploy:\n')[1] ?? '';
+const deployPaths = () => deployJob().match(/git diff --quiet .* -- (.*?);/)?.[1].split(/\s+/) ?? [];
 
 test('amplify.yml caches the npm download cache, not node_modules that npm ci wipes', () => {
   const amplify = read('amplify.yml');
@@ -24,15 +28,35 @@ test('customHttp.yml serves hashed /assets/* as immutable for the web app', () =
   assert.match(headers, /appRoot:\s*web\b/);
   assert.match(
     headers,
-    /pattern:\s*'\/assets\/\*'\s*\n\s*headers:\s*\n\s*-\s*key:\s*'Cache-Control'\s*\n\s*value:\s*'[^']*\bimmutable\b[^']*'/,
+    /pattern:\s*'\/assets\/\*'\s*\n\s*headers:\s*\n\s*-\s*key:\s*'Cache-Control'\s*\n\s*value:\s*'public, max-age=31536000, immutable'/,
   );
 });
 
-test('ci.yml deploys to Amplify only after tests pass on main, and only for web changes', () => {
-  const deploy = read('.github/workflows/ci.yml').split('\n  deploy:\n')[1] ?? '';
+test('ci.yml has a deploy job that needs test, is limited to main, and diffs the frontend paths', () => {
+  const deploy = deployJob();
 
   assert.match(deploy, /needs:\s*test\b/);
   assert.match(deploy, /github\.ref == 'refs\/heads\/main'/);
-  assert.match(deploy, /-- web amplify\.yml customHttp\.yml/);
   assert.match(deploy, /AMPLIFY_WEBHOOK_URL/);
+  assert.deepEqual(deployPaths(), [
+    'web',
+    'tampermonkey/progress-sync.user.js',
+    'amplify.yml',
+    'customHttp.yml',
+  ]);
+});
+
+test('every file bundled from outside web/ is in the deploy path filter', () => {
+  const srcDir = join(repoRoot, 'web', 'src');
+  const bundledFromOutside = readdirSync(srcDir)
+    .filter((name) => /\.jsx?$/.test(name))
+    .flatMap((name) => [
+      ...readFileSync(join(srcDir, name), 'utf8').matchAll(/from '\.\.\/\.\.\/([^'?]+)/g),
+    ].map((match) => match[1]));
+
+  // Guards against the regex silently matching nothing.
+  assert.ok(bundledFromOutside.length > 0, 'expected to find the tampermonkey import');
+  for (const file of bundledFromOutside) {
+    assert.ok(deployPaths().includes(file), `${file} is bundled into the frontend but is not in the deploy path filter`);
+  }
 });
