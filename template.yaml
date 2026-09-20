@@ -4,21 +4,28 @@ Description: Builder Badge Board - data layer
 
 Parameters:
   AlertEmail:
-    Type: String
-    Default: minsteww26@gmail.com
-    Description: Email address to receive AWS cost/usage alerts
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /builder-badge-board/alert-email
+    Description: >-
+      Name of the SSM parameter (not the address itself) holding the email that
+      receives cost and alarm alerts. Keeps the address out of this public repo.
+      Create it once before the first deploy:
+      aws ssm put-parameter --name /builder-badge-board/alert-email --type String --value you@example.com
   BuilderProfileId:
     Type: String
     Default: b65d0e67-8c3d-4124-8cf2-cbabbf7f4fff
     Description: AWS Builder Center profile ID (bpId), used by the badge sync endpoint
-  SyncKey:
+  SyncKeyParameter:
     Type: String
-    NoEcho: true
+    Default: /builder-badge-board/sync-key
+    AllowedPattern: '^/.+'
     Description: >-
-      Shared secret checked by POST /badges/progress-sync (no Cognito auth,
-      since the Tampermonkey userscript can't do an interactive login).
-      No default on purpose — must be passed explicitly at deploy time,
-      never committed to the template.
+      Name (must start with /) of the SecureString SSM parameter holding the
+      shared secret checked by POST /badges/progress-sync (no Cognito auth,
+      since the Tampermonkey userscript can't do an interactive login). The
+      Lambda reads the value at runtime, so it never appears in this template,
+      in stack parameters, or in the function's configuration. Create it once:
+      aws ssm put-parameter --name /builder-badge-board/sync-key --type SecureString --value "$(openssl rand -hex 32)"
 
 Globals:
   Function:
@@ -31,14 +38,18 @@ Globals:
         ARTICLES_TABLE: !Ref ArticlesTable
         SETTINGS_TABLE: !Ref SettingsTable
         BUILDER_PROFILE_ID: !Ref BuilderProfileId
-        SYNC_KEY: !Ref SyncKey
+        SYNC_KEY_PARAM: !Ref SyncKeyParameter
 
 Resources:
   BadgesTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: Badges
       BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S
@@ -52,9 +63,13 @@ Resources:
 
   ArticlesTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: Articles
       BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S
@@ -68,9 +83,13 @@ Resources:
 
   SettingsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: Settings
       BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S
@@ -82,6 +101,14 @@ Resources:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: builder-badge-board-admin
+      # Quoted on purpose: an unquoted ON is a boolean in YAML 1.1. TOTP only
+      # (no SMS), so no SmsConfiguration and no per-message cost. The login
+      # form in web/src/auth.js handles both the MFA_SETUP (first login) and
+      # SOFTWARE_TOKEN_MFA (every login after) challenges — deploy the
+      # frontend before this change or the admin page can't sign in.
+      MfaConfiguration: 'ON'
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: true
       Policies:
@@ -97,6 +124,15 @@ Resources:
     Properties:
       UserPoolId: !Ref UserPool
       GenerateSecret: false
+      # Defaults to LEGACY, which answers UserNotFoundException for an unknown
+      # username — lets anyone check whether an email is the admin login.
+      PreventUserExistenceErrors: ENABLED
+      # logout() in web/src/auth.js relies on RevokeToken working.
+      EnableTokenRevocation: true
+      # Minutes a challenge session (MFA code, first-time TOTP enrollment)
+      # stays valid. The 3-minute default is tight for scanning a new secret
+      # into an authenticator app.
+      AuthSessionValidity: 10
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_USER_PASSWORD_AUTH
@@ -116,7 +152,6 @@ Resources:
         AllowOrigins:
           - "https://builder.minkim26.tech"
           - "https://main.d2xsuyav9vi5h7.amplifyapp.com"
-          - "http://localhost:5173"
         AllowMethods:
           - GET
           - POST
@@ -135,6 +170,13 @@ Resources:
               audience:
                 - !Ref UserPoolClient
             IdentitySource: "$request.header.Authorization"
+      # ponytail: global across all callers, not per-IP — a flood can still
+      # produce 429s for real visitors, but it can no longer run up the
+      # DynamoDB/Lambda bill unbounded. Per-IP limits need WAF (~$5/mo+),
+      # add when this actually gets hit (see Api4xxAlarm below).
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
       # ponytail: this doesn't close the progress-sync count-check race by
       # itself, but it bounds how fast a leaked SYNC_KEY could exploit it.
       # A real fix needs an atomic counter item, not justified here yet.
@@ -142,12 +184,23 @@ Resources:
         "POST /badges/progress-sync":
           ThrottlingBurstLimit: 5
           ThrottlingRateLimit: 2
+      # Every variable here is documented for HTTP APIs. messageString is the
+      # pre-quoted form of error.message so each line stays valid JSON.
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","routeKey":"$context.routeKey","status":"$context.status","responseLatency":"$context.responseLatency","userAgent":"$context.identity.userAgent","error":$context.error.messageString}'
 
   CrudFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
       Handler: handler.handler
+      # A new, explicitly named group so retention is enforced. The group
+      # Lambda auto-created earlier never expires and can't be adopted into
+      # this stack, so it stays behind — delete it by hand once you've
+      # confirmed the new one is receiving logs.
+      LoggingConfig:
+        LogGroup: !Ref CrudFunctionLogGroup
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref BadgesTable
@@ -155,6 +208,25 @@ Resources:
             TableName: !Ref ArticlesTable
         - DynamoDBCrudPolicy:
             TableName: !Ref SettingsTable
+        # Read access to the one sync-key parameter, nothing else in SSM. The
+        # kms:Decrypt statement is belt and braces: the default aws/ssm key's
+        # own policy is believed to already let account principals decrypt
+        # through SSM, so this most likely changes nothing. It can only add
+        # access, and only for SSM acting on this one parameter. It was never
+        # tested against real AWS; remove it to keep the role minimal, or keep
+        # it if the parameter ever moves to a customer managed key.
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SyncKeyParameter}
+            - Effect: Allow
+              Action: kms:Decrypt
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+                  kms:EncryptionContext:PARAMETER_ARN: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SyncKeyParameter}
       Events:
         ListBadges:
           Type: HttpApi
@@ -185,8 +257,8 @@ Resources:
             Path: /badges/progress-sync
             Method: POST
             # No Cognito authorizer — the Tampermonkey userscript can't do
-            # an interactive login. Protected by the SYNC_KEY shared secret
-            # instead, checked in the handler itself.
+            # an interactive login. Protected by a shared secret kept in SSM
+            # (SyncKeyParameter), checked in the handler itself.
         NightlySyncV2:
           Type: ScheduleV2
           Properties:
@@ -262,6 +334,120 @@ Resources:
             Method: PUT
             Auth:
               Authorizer: CognitoAuthorizer
+
+  # vendedlogs/ prefix keeps API Gateway's log-delivery resource policy from
+  # hitting CloudWatch's per-account policy size limit.
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/vendedlogs/builder-badge-board/http-api
+      RetentionInDays: 30
+
+  CrudFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/builder-badge-board-crud
+      RetentionInDays: 30
+
+  # The address is subscribed but not active until you click the confirmation
+  # link SNS emails after the first deploy — no alarm reaches you before that.
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  # Covers a failed nightly sync too: that path has no try/catch, so a failure
+  # throws and counts as a Lambda error.
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda reported an error (includes a failed nightly Builder Center sync)
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CrudFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # 401s from a bad token, 429s from the throttle above, and 404s from probing
+  # all land here — normal traffic on this site produces almost no 4xx.
+  Api4xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Spike in API 4xx responses (probing, brute force, or throttling)
+      Namespace: AWS/ApiGateway
+      MetricName: 4xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref HttpApi
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 50
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # LambdaErrorsAlarm only counts unhandled exceptions, but the handler catches
+  # most failures (a DynamoDB outage, an unreadable sync key) and answers 500 —
+  # those never reach that metric, so they need their own alarm.
+  Api5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The API answered with a 5xx (a handled backend failure)
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref HttpApi
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # Matches the console.warn in progressSync() when the X-Sync-Key is wrong.
+  # A plain-text match, so it depends on the function's default Text log
+  # format: adding LogFormat: JSON to CrudFunction would silently stop it
+  # matching and the alarm below would never fire.
+  ProgressSyncRejectedFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CrudFunctionLogGroup
+      FilterPattern: '"progress-sync rejected"'
+      MetricTransformations:
+        - MetricNamespace: BuilderBadgeBoard
+          MetricName: ProgressSyncRejected
+          MetricValue: '1'
+          DefaultValue: 0
+
+  ProgressSyncRejectedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Repeated wrong X-Sync-Key attempts on POST /badges/progress-sync
+      Namespace: BuilderBadgeBoard
+      MetricName: ProgressSyncRejected
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
 
   MonthlyCostBudget:
     Type: AWS::Budgets::Budget
