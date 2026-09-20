@@ -42,3 +42,31 @@ jobs:
 
       - name: Validate SAM template
         run: sam validate --lint
+
+  # Amplify's own auto-build on main is off, so this job is the only thing that
+  # deploys the frontend. Gating it on `test` and on frontend paths is what keeps
+  # backend-only and docs-only pushes from spending Amplify build minutes.
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Trigger Amplify build if the frontend changed
+        env:
+          BEFORE: ${{ github.event.before }}
+          AMPLIFY_WEBHOOK_URL: ${{ secrets.AMPLIFY_WEBHOOK_URL }}
+        run: |
+          # An unknown "before" (first push, force push) counts as changed, so a
+          # deploy is never skipped by mistake.
+          if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null \
+            || ! git diff --quiet "$BEFORE" "$GITHUB_SHA" -- web amplify.yml customHttp.yml; then
+            curl --fail --silent --show-error -X POST -d '{}' \
+              -H 'Content-Type: application/json' \
+              "${AMPLIFY_WEBHOOK_URL}&operation=startbuild"
+          else
+            echo "No frontend changes in ${BEFORE}..${GITHUB_SHA}, skipping the Amplify build."
+          fi

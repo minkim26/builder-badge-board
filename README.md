@@ -77,9 +77,39 @@ In-progress badges need a one-time browser setup instead: see
 [tampermonkey/README.md](tampermonkey/README.md) for the userscript that
 handles it.
 
-Frontend: **deployed.** The Amplify Hosting app is connected to this repo
-(`amplify.yml` at the repo root configures the build), and pushes to `main`
-build and deploy automatically. The app is live at
+Frontend: **deployed.** The Amplify Hosting app is connected to this repo.
+`amplify.yml` at the repo root configures the build, and `customHttp.yml`
+(also at the root, as Amplify requires for a monorepo) makes the hashed
+`/assets/*` files cache-forever so browsers stop revalidating them.
+
+Amplify's own auto-build on `main` is turned off. Instead, the `deploy` job in
+`.github/workflows/ci.yml` starts an Amplify build through an incoming
+webhook, but only after the tests pass on `main` and only when `web/`,
+`amplify.yml`, or `customHttp.yml` changed. Backend-only and docs-only pushes
+don't spend any Amplify build minutes. To redeploy by hand, use "Redeploy this
+version" in the Amplify console.
+
+One-time setup for that, needed for any Amplify app that uses this repo. Run
+these before merging the change that adds the `deploy` job, so there's no gap
+in deploys and no double build:
+
+```bash
+# 1. Create the incoming webhook and store it as a GitHub secret. The URL
+#    carries a token, so it's piped straight in instead of printed.
+aws amplify create-webhook --app-id d2xsuyav9vi5h7 --branch-name main \
+  --description ci-deploy --region us-east-1 \
+  --query webhook.webhookUrl --output text \
+  | gh secret set AMPLIFY_WEBHOOK_URL --repo minkim26/builder-badge-board
+
+# 2. Turn off Amplify's auto-build on main
+aws amplify update-branch --app-id d2xsuyav9vi5h7 --branch-name main \
+  --no-enable-auto-build --region us-east-1
+```
+
+To go back to Amplify's own auto-build, run the second command with
+`--enable-auto-build`, then delete the webhook and the secret.
+
+The app is live at
 [https://builder.minkim26.tech](https://builder.minkim26.tech). DNS is
 managed by a third-party registrar rather than Route 53, so the
 certificate-validation and subdomain records were added by hand (see
