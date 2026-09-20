@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 // Guards the hosting and deploy settings that keep Amplify build minutes low.
 // Plain text matching on purpose: no YAML parser dependency for four checks.
@@ -47,16 +47,30 @@ test('ci.yml has a deploy job that needs test, is limited to main, and diffs the
 });
 
 test('every file bundled from outside web/ is in the deploy path filter', () => {
-  const srcDir = join(repoRoot, 'web', 'src');
-  const bundledFromOutside = readdirSync(srcDir)
-    .filter((name) => /\.jsx?$/.test(name))
-    .flatMap((name) => [
-      ...readFileSync(join(srcDir, name), 'utf8').matchAll(/from '\.\.\/\.\.\/([^'?]+)/g),
-    ].map((match) => match[1]));
+  const webDir = join(repoRoot, 'web');
+  const srcDir = join(webDir, 'src');
+  const filterPaths = deployPaths();
+  // Relative specifiers only: `from './x'`, `import './x'` and `import('./x')`.
+  const specifier = /(?:\bfrom\s*|\bimport\s*\(?\s*)['"](\.[^'"?]*)/g;
 
-  // Guards against the regex silently matching nothing.
+  // Walks src recursively and resolves each import against the importing file,
+  // so a nested component reaching outside web/ is caught too.
+  const bundledFromOutside = readdirSync(srcDir, { recursive: true })
+    .filter((name) => /\.jsx?$/.test(name))
+    .flatMap((name) => {
+      const file = join(srcDir, name);
+      return [...readFileSync(file, 'utf8').matchAll(specifier)]
+        .map((match) => resolve(dirname(file), match[1]))
+        .filter((target) => relative(webDir, target).startsWith('..'))
+        .map((target) => relative(repoRoot, target));
+    });
+
+  // Guards against the scan silently matching nothing.
   assert.ok(bundledFromOutside.length > 0, 'expected to find the tampermonkey import');
-  for (const file of bundledFromOutside) {
-    assert.ok(deployPaths().includes(file), `${file} is bundled into the frontend but is not in the deploy path filter`);
+  for (const target of bundledFromOutside) {
+    assert.ok(
+      filterPaths.some((path) => target === path || target.startsWith(`${path}/`)),
+      `${target} is bundled into the frontend but is not in the deploy path filter`,
+    );
   }
 });
