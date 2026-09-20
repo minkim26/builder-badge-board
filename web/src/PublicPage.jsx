@@ -220,7 +220,9 @@ export default function PublicPage() {
                 return (
                   <li key={a.articleId} className="article-card">
                     <CardLink className="article-card-link" {...linkProps}>
-                      {a.thumbnailUrl && <img className="article-thumb" src={a.thumbnailUrl} alt="" />}
+                      {a.thumbnailUrl && isSafeUrl(a.thumbnailUrl) && (
+                        <img className="article-thumb" src={a.thumbnailUrl} alt="" />
+                      )}
                       <span className="article-title">{a.title}</span>
                       {a.publishDate && <span className="article-date">{a.publishDate}</span>}
                       {a.description && <span className="article-description">{a.description}</span>}

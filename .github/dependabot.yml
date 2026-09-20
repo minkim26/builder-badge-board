@@ -1,0 +1,17 @@
+# Weekly update PRs for the two npm packages and for the SHA-pinned actions in
+# .github/workflows (a pinned SHA never moves on its own, so without this the
+# pins would go stale).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /src
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

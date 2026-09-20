@@ -1,9 +1,24 @@
 # Amplify requires customHttp.yml in the repo root for a monorepo; appRoot
-# names the app the headers apply to.
+# names the app the headers apply to. (Headers inside amplify.yml are the
+# legacy location, and AWS recommends migrating them out, so they live here.)
 #
-# Only Vite's content-hashed output under /assets is made immutable, so browsers
-# stop revalidating it on every visit. index.html and unhashed files keep
-# Amplify's defaults so a new deploy shows up right away.
+# Amplify applies only the first pattern that matches a given path — it does
+# not merge headers from multiple matching blocks (see
+# https://github.com/aws-amplify/amplify-hosting/issues/2899). An /assets/*
+# request matches both patterns below, so /assets/* has to come first and
+# repeats the security headers itself, or hashed assets would lose them.
+#
+# The CSP names this deployment's API and Cognito hosts explicitly (a
+# wildcard would let injected script post to anyone's execute-api endpoint).
+# If the stack is redeployed with a new API URL, update connect-src here as
+# well as web/src/config.js.
+# img-src allows any https origin because article thumbnails come from
+# Builder Center's CDN; style-src has no inline allowance since React sets
+# style properties through the DOM, not style="" attributes.
+#
+# Only Vite's content-hashed output under /assets is made immutable, so
+# browsers stop revalidating it on every visit. index.html and unhashed files
+# keep Amplify's defaults so a new deploy shows up right away.
 applications:
   - appRoot: web
     customHeaders:
@@ -11,3 +26,29 @@ applications:
         headers:
           - key: 'Cache-Control'
             value: 'public, max-age=31536000, immutable'
+          - key: 'Strict-Transport-Security'
+            value: 'max-age=31536000; includeSubDomains'
+          - key: 'Content-Security-Policy'
+            value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://g54rvvnbf8.execute-api.us-east-1.amazonaws.com https://cognito-idp.us-east-1.amazonaws.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+          - key: 'X-Frame-Options'
+            value: 'DENY'
+          - key: 'X-Content-Type-Options'
+            value: 'nosniff'
+          - key: 'Referrer-Policy'
+            value: 'strict-origin-when-cross-origin'
+          - key: 'Permissions-Policy'
+            value: 'camera=(), microphone=(), geolocation=()'
+      - pattern: '**/*'
+        headers:
+          - key: 'Strict-Transport-Security'
+            value: 'max-age=31536000; includeSubDomains'
+          - key: 'Content-Security-Policy'
+            value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://g54rvvnbf8.execute-api.us-east-1.amazonaws.com https://cognito-idp.us-east-1.amazonaws.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+          - key: 'X-Frame-Options'
+            value: 'DENY'
+          - key: 'X-Content-Type-Options'
+            value: 'nosniff'
+          - key: 'Referrer-Policy'
+            value: 'strict-origin-when-cross-origin'
+          - key: 'Permissions-Policy'
+            value: 'camera=(), microphone=(), geolocation=()'
