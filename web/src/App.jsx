@@ -24,13 +24,9 @@ export default function App() {
         <a href="#">Home</a>
         <a href="#admin">Admin</a>
       </nav>
-      {isAdmin ? (
-        <Suspense fallback={<p role="status">Loading...</p>}>
-          <AdminPage />
-        </Suspense>
-      ) : (
-        <PublicPage />
-      )}
+      <Suspense fallback={<p role="status">Loading...</p>}>
+        {isAdmin ? <AdminPage /> : <PublicPage />}
+      </Suspense>
     </div>
   );
 }
