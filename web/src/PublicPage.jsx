@@ -50,6 +50,16 @@ function badgeCategory(catalog) {
   return catalog?.icon?.includes('_HotStreaks_') ? 'streaks' : 'community';
 }
 
+// Finer-grained than badgeCategory() above (which folds GettingStarted and
+// EnsuringQualityContent into one "community" filter pill) — this drives the
+// small color accent on earned cards (see index.css's --cat-* variables),
+// where the three groups' real badge artwork genuinely looks different.
+function badgeAccentCategory(catalog) {
+  if (catalog?.icon?.includes('_HotStreaks_')) return 'streaks';
+  if (catalog?.icon?.includes('_EnsuringQualityContent_')) return 'quality';
+  return 'start'; // GettingStarted — the only other category in this catalog
+}
+
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'earned', label: 'Earned' },
@@ -174,11 +184,12 @@ export default function PublicPage() {
               {visibleBadges.map((b) => {
                 const catalog = catalogEntry(b.name);
                 const pct = badgePercent(b);
+                const accentClass = b.status === 'earned' ? ` cat-${badgeAccentCategory(catalog)}` : '';
                 return (
-                  <li key={b.badgeId} className={`badge-card badge-${b.status}`}>
+                  <li key={b.badgeId} className={`badge-card badge-${b.status}${accentClass}`}>
                     <button type="button" className="badge-card-trigger" onClick={() => setSelectedBadge(b)}>
                       {catalog?.icon && <img className="badge-icon" src={`/badges/${catalog.icon}`} alt="" width="64" height="64" />}
-                      <strong>{b.name}</strong>
+                      <strong className="badge-name">{b.name}</strong>
                       <span className="badge-status">{b.status}</span>
                       {b.dateEarned && <span className="badge-date">{b.dateEarned}</span>}
                       {pct !== null && (
@@ -237,7 +248,7 @@ export default function PublicPage() {
 
       <dialog
         ref={dialogRef}
-        className="badge-dialog"
+        className={`badge-dialog${selectedBadge?.status === 'earned' ? ` cat-${badgeAccentCategory(selectedCatalog)}` : ''}`}
         aria-labelledby="badge-dialog-title"
         onClose={() => setSelectedBadge(null)}
         onClick={(e) => {
@@ -260,7 +271,7 @@ export default function PublicPage() {
             {selectedCatalog?.icon && (
               <img className="badge-icon badge-icon-lg" src={`/badges/${selectedCatalog.icon}`} alt="" width="96" height="96" />
             )}
-            <h3 id="badge-dialog-title">{selectedBadge.name}</h3>
+            <h3 id="badge-dialog-title" className="badge-name">{selectedBadge.name}</h3>
             <span className="badge-status">{selectedBadge.status}</span>
             {selectedBadge.dateEarned && <p className="badge-date">{selectedBadge.dateEarned}</p>}
             {selectedPct !== null && (

@@ -7,6 +7,12 @@
   --accent: #aa3bff;
   --accent-bg: rgba(170, 59, 255, 0.1);
   --accent-border: rgba(170, 59, 255, 0.5);
+  /* Earned-badge accent colors, one per real AWS badge category (see
+     PublicPage.jsx's badgeAccentCategory) — HotStreaks reuses --accent
+     above rather than a --cat-streaks of its own, since it's already
+     almost exactly that badge family's real icon color. */
+  --cat-quality: #00875a;
+  --cat-start: #0072d6;
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -43,6 +49,8 @@
     --accent: #c084fc;
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
+    --cat-quality: #4ade80;
+    --cat-start: #60a5fa;
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
@@ -358,16 +366,46 @@ section {
   height: 64px;
 }
 
+/* --cat is set by whichever .cat-* class is on this card/dialog (see
+   PublicPage.jsx's badgeAccentCategory) and inherits down to .badge-status
+   below — no per-category selector needed there. In-progress cards never
+   get a .cat-* class, so --cat is unset for them and every var(--cat, ...)
+   here falls through to the old single-accent look, unchanged. */
+.cat-streaks {
+  --cat: var(--accent);
+}
+.cat-quality {
+  --cat: var(--cat-quality);
+}
+.cat-start {
+  --cat: var(--cat-start);
+}
+
+/* Color is an accent here, not a fill: no background wash. 21 badges in 3
+   saturated fills read as noise, a thin colored border and status text
+   don't. */
 .badge-card.badge-earned {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
+  border-color: var(--cat, var(--accent-border));
+}
+
+.badge-card.badge-earned:hover {
+  border-color: var(--cat, var(--accent-border));
+  box-shadow: 0 0 0 1px var(--cat, var(--accent-border));
 }
 
 .badge-status {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--accent);
+  color: var(--cat, var(--accent));
+}
+
+/* Falls back to --text (this file's default body/name color, unchanged for
+   in-progress cards, which never get a .cat-* class) rather than --text-h,
+   so an uncategorized name doesn't shift shade from what it renders as today. */
+.badge-name,
+.badge-date {
+  color: var(--cat, var(--text));
 }
 
 .badge-date,
