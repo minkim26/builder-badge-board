@@ -144,6 +144,7 @@ code {
 
 nav {
   display: flex;
+  align-items: center;
   gap: 16px;
   padding: 16px 0;
   border-bottom: 1px solid var(--border);
@@ -158,6 +159,82 @@ nav a {
 
 nav a:hover {
   color: var(--accent);
+}
+
+.nav-icons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.nav-icon-link {
+  display: flex;
+}
+
+/* Native disclosure widget instead of a hand-built dropdown — no
+   click-outside/focus-trap JS needed, same pattern as .setup-panel below. */
+.theme-menu {
+  position: relative;
+}
+
+.theme-menu summary {
+  display: flex;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+}
+
+.theme-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.theme-menu summary:hover,
+.theme-menu[open] summary {
+  color: var(--accent);
+}
+
+.theme-menu-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.theme-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 130px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+
+.theme-menu-list button {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-menu-list button:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.theme-menu-list button[aria-current='true'] {
+  color: var(--text-h);
+  font-weight: 500;
 }
 
 section {
@@ -424,11 +501,13 @@ section {
   list-style: none;
   padding: 0;
   margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
 }
 
 .quick-links li {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 0;
 }
 
 .quick-links a {
