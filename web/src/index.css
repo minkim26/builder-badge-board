@@ -1,18 +1,18 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
+  --text: light-dark(#6b6375, #9ca3af);
+  --text-h: light-dark(#08060d, #f3f4f6);
+  --bg: light-dark(#fff, #16171d);
+  --border: light-dark(#e5e4e7, #2e303a);
+  --code-bg: light-dark(#f4f3ec, #1f2028);
+  --accent: light-dark(#aa3bff, #c084fc);
+  --accent-bg: light-dark(rgba(170, 59, 255, 0.1), rgba(192, 132, 252, 0.15));
+  --accent-border: light-dark(rgba(170, 59, 255, 0.5), rgba(192, 132, 252, 0.5));
   /* Earned-badge accent colors, one per real AWS badge category (see
      PublicPage.jsx's badgeAccentCategory) — HotStreaks reuses --accent
      above rather than a --cat-streaks of its own, since it's already
      almost exactly that badge family's real icon color. */
-  --cat-quality: #00875a;
-  --cat-start: #0072d6;
+  --cat-quality: light-dark(#00875a, #4ade80);
+  --cat-start: light-dark(#0072d6, #60a5fa);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -35,22 +35,13 @@
   }
 }
 
-/* :not([data-theme='light']) lets an explicit "force light" choice (see
-   theme.js) win even when the OS prefers dark. The [data-theme='dark'] block
-   below duplicates these values rather than sharing them (no preprocessor
-   here) so an explicit "force dark" choice works regardless of OS setting. */
+/* light-dark() above already picks the right value off color-scheme, so the
+   only thing an explicit data-theme choice needs to override is color-scheme
+   itself. --shadow is the one exception: it's two comma-separated box-shadow
+   layers, which light-dark() can't split from its own two arguments, so it
+   still needs its own light/dark values here. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --cat-quality: #4ade80;
-    --cat-start: #60a5fa;
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
@@ -61,16 +52,6 @@
 }
 
 :root[data-theme='dark'] {
-  --text: #9ca3af;
-  --text-h: #f3f4f6;
-  --bg: #16171d;
-  --border: #2e303a;
-  --code-bg: #1f2028;
-  --accent: #c084fc;
-  --accent-bg: rgba(192, 132, 252, 0.15);
-  --accent-border: rgba(192, 132, 252, 0.5);
-  --cat-quality: #4ade80;
-  --cat-start: #60a5fa;
   --shadow:
     rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   color-scheme: dark;
@@ -389,7 +370,6 @@ section {
 }
 
 .badge-card.badge-earned:hover {
-  border-color: var(--cat, var(--accent-border));
   box-shadow: 0 0 0 1px var(--cat, var(--accent-border));
 }
 
