@@ -7,19 +7,23 @@
   --accent: light-dark(#aa3bff, #c084fc);
   --accent-bg: light-dark(rgba(170, 59, 255, 0.1), rgba(192, 132, 252, 0.15));
   --accent-border: light-dark(rgba(170, 59, 255, 0.5), rgba(192, 132, 252, 0.5));
+  /* --accent's light-mode value is only 4.39:1 on white, under the 4.5:1
+     text requirement — border/hover-glow/backgrounds above don't need that,
+     so they keep --accent unchanged. Anything rendering text in the accent
+     color (the theme dropdown's hover state, the streaks badge category)
+     should use this darker variant instead. */
+  --accent-text: light-dark(#8f2fe0, #c084fc);
   /* Earned-badge accent colors, one per real AWS badge category (see
      PublicPage.jsx's badgeAccentCategory) — HotStreaks reuses --accent
      above rather than a --cat-streaks of its own, since it's already
      almost exactly that badge family's real icon color. */
   --cat-quality: light-dark(#00875a, #4ade80);
   --cat-start: light-dark(#0072d6, #60a5fa);
-  /* Text-only variants: badge-name/date/status need 4.5:1 against the page
-     background, which --accent and --cat-quality's light-mode values don't
-     clear (4.39:1 and 4.55:1 — too close to risk). Border/hover-glow keep
-     the brighter, icon-matching colors above; only text uses these darker
-     ones. --cat-start already clears 4.5:1 in both modes, so it has no
-     separate text variant. */
-  --cat-streaks-text: light-dark(#8f2fe0, #c084fc);
+  /* Text-only variant: badge-name/date/status need 4.5:1 against the page
+     background, which --cat-quality's light-mode value doesn't clear
+     (4.55:1 — too close to risk). Border/hover-glow keep the brighter,
+     icon-matching color above; only text uses this darker one. --cat-start
+     already clears 4.5:1 in both modes, so it has no separate text variant. */
   --cat-quality-text: light-dark(#00754e, #4ade80);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
@@ -226,7 +230,7 @@ nav a:hover {
 
 .theme-menu-list button:hover {
   background: var(--accent-bg);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .theme-menu-list button[aria-current='true'] {
@@ -362,7 +366,7 @@ section {
    here falls through to the old single-accent look, unchanged. */
 .cat-streaks {
   --cat: var(--accent);
-  --cat-text: var(--cat-streaks-text);
+  --cat-text: var(--accent-text);
 }
 .cat-quality {
   --cat: var(--cat-quality);
