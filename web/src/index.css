@@ -1,12 +1,30 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
+  --text: light-dark(#6b6375, #9ca3af);
+  --text-h: light-dark(#08060d, #f3f4f6);
+  --bg: light-dark(#fff, #16171d);
+  --border: light-dark(#e5e4e7, #2e303a);
+  --code-bg: light-dark(#f4f3ec, #1f2028);
+  --accent: light-dark(#aa3bff, #c084fc);
+  --accent-bg: light-dark(rgba(170, 59, 255, 0.1), rgba(192, 132, 252, 0.15));
+  --accent-border: light-dark(rgba(170, 59, 255, 0.5), rgba(192, 132, 252, 0.5));
+  /* --accent's light-mode value is only 4.39:1 on white, under the 4.5:1
+     text requirement — border/hover-glow/backgrounds above don't need that,
+     so they keep --accent unchanged. Anything rendering text in the accent
+     color (the theme dropdown's hover state, the streaks badge category)
+     should use this darker variant instead. */
+  --accent-text: light-dark(#8f2fe0, #c084fc);
+  /* Earned-badge accent colors, one per real AWS badge category (see
+     PublicPage.jsx's badgeAccentCategory) — HotStreaks reuses --accent
+     above rather than a --cat-streaks of its own, since it's already
+     almost exactly that badge family's real icon color. */
+  --cat-quality: light-dark(#00875a, #4ade80);
+  --cat-start: light-dark(#0072d6, #60a5fa);
+  /* Text-only variant: badge-name/date/status need 4.5:1 against the page
+     background, which --cat-quality's light-mode value doesn't clear
+     (4.55:1 — too close to risk). Border/hover-glow keep the brighter,
+     icon-matching color above; only text uses this darker one. --cat-start
+     already clears 4.5:1 in both modes, so it has no separate text variant. */
+  --cat-quality-text: light-dark(#00754e, #4ade80);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -29,19 +47,26 @@
   }
 }
 
+/* light-dark() above already picks the right value off color-scheme, so the
+   only thing an explicit data-theme choice needs to override is color-scheme
+   itself. --shadow is the one exception: it's two comma-separated box-shadow
+   layers, which light-dark() can't split from its own two arguments, so it
+   still needs its own light/dark values here. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
+  :root:not([data-theme='light']) {
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --shadow:
+    rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  color-scheme: dark;
 }
 
 body {
@@ -120,6 +145,7 @@ code {
 
 nav {
   display: flex;
+  align-items: center;
   gap: 16px;
   padding: 16px 0;
   border-bottom: 1px solid var(--border);
@@ -134,6 +160,82 @@ nav a {
 
 nav a:hover {
   color: var(--accent);
+}
+
+.nav-icons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.nav-icon-link {
+  display: flex;
+}
+
+/* Native disclosure widget instead of a hand-built dropdown — no
+   click-outside/focus-trap JS needed, same pattern as .setup-panel below. */
+.theme-menu {
+  position: relative;
+}
+
+.theme-menu summary {
+  display: flex;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+}
+
+.theme-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.theme-menu summary:hover,
+.theme-menu[open] summary {
+  color: var(--accent);
+}
+
+.theme-menu-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.theme-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 130px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+
+.theme-menu-list button {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-menu-list button:hover {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+}
+
+.theme-menu-list button[aria-current='true'] {
+  color: var(--text-h);
+  font-weight: 500;
 }
 
 section {
@@ -257,19 +359,56 @@ section {
   height: 64px;
 }
 
+/* --cat is set by whichever .cat-* class is on this card/dialog (see
+   PublicPage.jsx's badgeAccentCategory) and inherits down to .badge-status
+   below — no per-category selector needed there. In-progress cards never
+   get a .cat-* class, so --cat is unset for them and every var(--cat, ...)
+   here falls through to the old single-accent look, unchanged. */
+.cat-streaks {
+  --cat: var(--accent);
+  --cat-text: var(--accent-text);
+}
+.cat-quality {
+  --cat: var(--cat-quality);
+  --cat-text: var(--cat-quality-text);
+}
+.cat-start {
+  --cat: var(--cat-start);
+}
+
+/* Color is an accent here, not a fill: no background wash. 21 badges in 3
+   saturated fills read as noise, a thin colored border and status text
+   don't. */
 .badge-card.badge-earned {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
+  border-color: var(--cat, var(--accent-border));
+}
+
+.badge-card.badge-earned:hover {
+  box-shadow: 0 0 0 1px var(--cat, var(--accent-border));
 }
 
 .badge-status {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--accent);
+  color: var(--cat-text, var(--cat, var(--accent)));
 }
 
-.badge-date,
+/* Falls back to --text (this file's default body/name color, unchanged for
+   in-progress cards, which never get a .cat-* class) rather than --text-h,
+   so an uncategorized name doesn't shift shade from what it renders as today. */
+.badge-name,
+.badge-date {
+  color: var(--cat-text, var(--cat, var(--text)));
+}
+
+/* badge-date skips the opacity below: at 0.75 it blends every category
+   color toward the background and drops all of them under 4.5:1 (measured
+   as low as 3.0:1), even the ones that clear it at full opacity. */
+.badge-date {
+  font-size: 14px;
+}
+
 .article-date,
 .article-description {
   font-size: 14px;
@@ -400,11 +539,13 @@ section {
   list-style: none;
   padding: 0;
   margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
 }
 
 .quick-links li {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 0;
 }
 
 .quick-links a {
@@ -421,17 +562,28 @@ section {
   flex-shrink: 0;
 }
 
+/* :not([data-theme='light']) mirrors the same override rule the color
+   variables use above, so an explicit theme choice also controls which
+   icon variant shows, not just the OS setting. */
 .icon-dark {
   display: none;
 }
 
 @media (prefers-color-scheme: dark) {
-  .icon-light {
+  :root:not([data-theme='light']) .icon-light {
     display: none;
   }
-  .icon-dark {
+  :root:not([data-theme='light']) .icon-dark {
     display: inline;
   }
+}
+
+:root[data-theme='dark'] .icon-light {
+  display: none;
+}
+
+:root[data-theme='dark'] .icon-dark {
+  display: inline;
 }
 
 .checklist-meta {
