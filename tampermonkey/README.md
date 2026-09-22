@@ -33,8 +33,8 @@ conflict.
   load your progress data — not a scheduled background job. Check in on it
   occasionally rather than assuming it fires nightly.
 - The sync key only grants write access to this app's own badge data. If
-  it ever leaks, rotate it by overwriting the SSM parameter (the command is
-  in the main README's Deploy section) and pasting the new key into this
+  it ever leaks, rotate it by overwriting the SSM parameter (see
+  [docs/DEPLOY.md](../docs/DEPLOY.md)) and pasting the new key into this
   script. Nothing needs redeploying, but for up to five minutes a warm
   function still expects the old key, so expect a few 401s right after
   rotating.
