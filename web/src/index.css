@@ -29,8 +29,12 @@
   }
 }
 
+/* :not([data-theme='light']) lets an explicit "force light" choice (see
+   theme.js) win even when the OS prefers dark. The [data-theme='dark'] block
+   below duplicates these values rather than sharing them (no preprocessor
+   here) so an explicit "force dark" choice works regardless of OS setting. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --text: #9ca3af;
     --text-h: #f3f4f6;
     --bg: #16171d;
@@ -42,6 +46,26 @@
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --text: #9ca3af;
+  --text-h: #f3f4f6;
+  --bg: #16171d;
+  --border: #2e303a;
+  --code-bg: #1f2028;
+  --accent: #c084fc;
+  --accent-bg: rgba(192, 132, 252, 0.15);
+  --accent-border: rgba(192, 132, 252, 0.5);
+  --cat-quality: #4ade80;
+  --cat-start: #60a5fa;
+  --shadow:
+    rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  color-scheme: dark;
 }
 
 body {
@@ -421,17 +445,28 @@ section {
   flex-shrink: 0;
 }
 
+/* :not([data-theme='light']) mirrors the same override rule the color
+   variables use above, so an explicit theme choice also controls which
+   icon variant shows, not just the OS setting. */
 .icon-dark {
   display: none;
 }
 
 @media (prefers-color-scheme: dark) {
-  .icon-light {
+  :root:not([data-theme='light']) .icon-light {
     display: none;
   }
-  .icon-dark {
+  :root:not([data-theme='light']) .icon-dark {
     display: inline;
   }
+}
+
+:root[data-theme='dark'] .icon-light {
+  display: none;
+}
+
+:root[data-theme='dark'] .icon-dark {
+  display: inline;
 }
 
 .checklist-meta {
