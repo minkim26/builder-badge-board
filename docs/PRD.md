@@ -203,7 +203,7 @@ triggers a Lambda that fetches/parses the profile and upserts into DynamoDB.
       this app's own storage) and redesigned the public article list into a
       card grid to actually show it. Wired into the same nightly schedule
       and a matching "Sync from Builder Center" button as badges.
-- [ ] **7. End-to-end test + article** — test the full flow, take
+- [x] **7. End-to-end test + article** — test the full flow, take
       screenshots/recording, write the Builder Center article.
 
 ## Open Decisions Log
