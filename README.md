@@ -53,24 +53,17 @@ sam build
 sam deploy --guided   # first time only; subsequent deploys: sam deploy
 ```
 
-Before the first deploy, create two SSM parameters:
-
-```bash
-aws ssm put-parameter --name /builder-badge-board/alert-email \
-  --type String --value you@example.com
-
-aws ssm put-parameter --name /builder-badge-board/sync-key \
-  --type SecureString --value "$(openssl rand -hex 32)"
-```
+Before the first deploy, create two SSM parameters (commands in
+[docs/DEPLOY.md](docs/DEPLOY.md)).
 
 After the first deploy: create the admin user, wire the stack outputs into
 `web/src/config.js` and `customHttp.yml`, and confirm the SNS alert
 subscription. Earned badges then sync on their own (a button in the admin
-panel plus a nightly job); in-progress badges need a one-time userscript —
+panel plus a nightly job); in-progress badges need a one-time userscript,
 see [tampermonkey/README.md](tampermonkey/README.md).
 
-**Full runbook — guided-deploy parameters, sync-key rotation, the MFA
-cutover order for existing deployments, and the Amplify CI wiring — is in
+**Full runbook: guided-deploy parameters, sync-key rotation, the MFA
+cutover order for existing deployments, and the Amplify CI wiring. See
 [docs/DEPLOY.md](docs/DEPLOY.md).**
 
 Frontend is Amplify Hosting, deployed by CI (not Amplify's own auto-build)

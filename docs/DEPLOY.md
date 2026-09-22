@@ -41,8 +41,8 @@ address. Alarm emails don't reach you until you click it.
 `sam deploy` prints an API Gateway URL and a Cognito user pool/client ID.
 Copy those into `web/src/config.js`, copy the API URL into `SYNC_URL` in
 `tampermonkey/progress-sync.user.js`, and update the API host in the
-`connect-src` of the Content-Security-Policy in `customHttp.yml` — a fresh
-stack has different values than the ones already committed there.
+`connect-src` of the Content-Security-Policy in `customHttp.yml`, since a
+fresh stack has different values than the ones already committed there.
 
 ## Rotating the sync key
 
@@ -53,7 +53,7 @@ aws ssm put-parameter --name /builder-badge-board/sync-key \
 
 Then paste the new value into the userscript. The Lambda caches the key for
 up to five minutes, so a warm function keeps accepting the old key for that
-long — expect a few 401s right after rotating, and each one counts toward
+long. Expect a few 401s right after rotating, and each one counts toward
 the wrong-key alarm (five in five minutes emails you). That's expected once;
 give it five minutes before investigating. If the parameter is missing or
 unreadable instead, `progress-sync` answers 500 and the API 5xx alarm
@@ -116,7 +116,7 @@ webhook, but only after tests pass on `main` and only when `web/`,
 `tampermonkey/progress-sync.user.js` (bundled into the admin page),
 `amplify.yml`, or `customHttp.yml` changed. Backend-only and docs-only
 pushes don't spend any Amplify build minutes. To build the current tip of
-`main` by hand — for example after a run that failed:
+`main` by hand, for example after a run that failed:
 
 ```bash
 aws amplify start-job --app-id d2xsuyav9vi5h7 --branch-name main \
