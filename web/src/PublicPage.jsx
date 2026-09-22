@@ -57,7 +57,12 @@ function badgeCategory(catalog) {
 function badgeAccentCategory(catalog) {
   if (catalog?.icon?.includes('_HotStreaks_')) return 'streaks';
   if (catalog?.icon?.includes('_EnsuringQualityContent_')) return 'quality';
-  return 'start'; // GettingStarted — the only other category in this catalog
+  if (catalog?.icon?.includes('_GettingStarted_')) return 'start';
+  // Sync accepts AWS display names without catalog validation (handler.js),
+  // so a badge not yet in BADGE_CATALOG lands here — no .cat-unknown rule
+  // exists, so it falls back to the pre-redesign single-accent look instead
+  // of being mislabeled into a real category.
+  return 'unknown';
 }
 
 const STATUS_FILTERS = [
