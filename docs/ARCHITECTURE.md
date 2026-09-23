@@ -15,8 +15,8 @@ via `sam build` / `sam deploy`. Reasons:
   weekend-sized.
 
 Amplify Hosting (frontend, including the webhook and GitHub secret that
-trigger its builds — see the README's Deploy section) and the Cognito user
-pool are the two pieces not covered by the SAM template — see their sections
+trigger its builds — see [DEPLOY.md](DEPLOY.md)) and the Cognito user pool
+are the two pieces not covered by the SAM template — see their sections
 below for why.
 
 ## AWS Services
