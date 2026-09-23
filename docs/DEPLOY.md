@@ -10,8 +10,8 @@ rotating secrets, the MFA cutover order, and the Amplify CI wiring.
 Stack name, region, and capabilities live in `samconfig.toml`, so a bare
 `sam deploy` works after the first guided run.
 
-Nothing secret is passed on the command line. The stack only knows the sync
-key's *name* (the Lambda reads the value itself at runtime); the alert
+No secrets are passed as SAM/CloudFormation parameters. The stack only knows
+the sync key's *name* (the Lambda reads the value itself at runtime); the alert
 address is looked up at deploy time, which is fine since it isn't a secret,
 just something to keep out of this public repo. Create both parameters
 before the first deploy:
