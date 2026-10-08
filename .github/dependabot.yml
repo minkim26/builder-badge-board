@@ -1,17 +1,27 @@
 # Weekly update PRs for the two npm packages and for the SHA-pinned actions in
 # .github/workflows (a pinned SHA never moves on its own, so without this the
-# pins would go stale).
+# pins would go stale). Minor and patch bumps are grouped into one PR per
+# directory; major bumps stay as separate PRs.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /src
     schedule:
       interval: weekly
+    groups:
+      src-npm:
+        update-types: [minor, patch]
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
+    groups:
+      web-npm:
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]
